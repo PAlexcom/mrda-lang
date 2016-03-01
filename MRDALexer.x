@@ -10,7 +10,7 @@ $alpha = [a-zA-Z]   -- alphabetic characters
 tokens :-
     $white+           	;
     $digit+         	{ \s -> Int (read s) }
-    [\+\*]             	{ \s -> Sym (head s) }
+    [\+\*\;]            { \s -> Sym (head s) }
 
 {
 -- Each action has type :: String -> Token
