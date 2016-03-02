@@ -8,12 +8,17 @@ $digit = 0-9        -- digits
 $alpha = [a-zA-Z]   -- alphabetic characters
 
 tokens :-
-    $white+           	;
-    $digit+         	{ \s -> Int (read s) }
-    [\+\*\;]            { \s -> Sym (head s) }
+    $white+     ;
+    $digit+     { \s -> TokenInt (read s) }
+    [\+]        { \s -> TokenPlus (head s) }
+    [\*]        { \s -> TokenTimes (head s) }
+    [\;]        { \s -> TokenSemicolon (head s) }
 
 {
 -- Each action has type :: String -> Token
-data Token = Sym Char | Int Int 
-	deriving (Eq,Show)
+data Token = TokenPlus Char
+    | TokenTimes Char
+    | TokenSemicolon Char
+    | TokenInt Int
+    deriving (Eq,Show)
 }

@@ -3,9 +3,15 @@ import System.Environment ( getArgs, getProgName )
 import System.Exit ( exitFailure, exitSuccess )
 
 import MRDALexer
+import MRDAParser
 
 runFile f = putStrLn f >> readFile f >>= run
-run s = print (alexScanTokens s)
+run s = do
+    print ("Tokens")
+    print (alexScanTokens s)
+    print ("Derivation Tree")
+    print (parseTokens (alexScanTokens s))
+
 
 main = do
   args <- getArgs
