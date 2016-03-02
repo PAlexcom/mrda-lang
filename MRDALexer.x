@@ -10,15 +10,11 @@ $alpha = [a-zA-Z]   -- alphabetic characters
 tokens :-
     $white+     ;
     $digit+     { \s -> TokenInt (read s) }
-    [\+]        { \s -> TokenPlus (head s) }
-    [\*]        { \s -> TokenTimes (head s) }
-    [\;]        { \s -> TokenSemicolon (head s) }
+    [\+\*\;]    { \s -> TokenSymbol (head s) }
 
 {
 -- Each action has type :: String -> Token
-data Token = TokenPlus Char
-    | TokenTimes Char
-    | TokenSemicolon Char
+data Token = TokenSymbol Char
     | TokenInt Int
     deriving (Eq,Show)
 }
