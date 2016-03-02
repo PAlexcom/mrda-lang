@@ -2,19 +2,19 @@
 module MRDALexer where
 }
 
-%wrapper "basic"
+%wrapper "posn"
 
 $digit = 0-9        -- digits
 $alpha = [a-zA-Z]   -- alphabetic characters
 
 tokens :-
     $white+     ;
-    $digit+     { \s -> TokenInt (read s) }
-    [\+\*\;]    { \s -> TokenSymbol (head s) }
+    $digit+     { \pos s -> TokenInt (pos, (read s)) }
+    [\+\*\;]    { \pos s -> TokenSymbol (pos, (head s)) }
 
 {
 -- Each action has type :: String -> Token
-data Token = TokenSymbol Char
-    | TokenInt Int
+data Token = TokenSymbol (AlexPosn, Char)
+    | TokenInt (AlexPosn, Int)
     deriving (Eq,Show)
 }

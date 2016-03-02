@@ -8,10 +8,12 @@ import MRDAParser
 runFile f = putStrLn f >> readFile f >>= run
 run s = do
     print ("Tokens")
-    print (alexScanTokens s)
+    print (tokens)
     print ("Derivation Tree")
-    print (parseTokens (alexScanTokens s))
-
+    print (derivationTree)
+    where
+        tokens = alexScanTokens s
+        derivationTree = parseTokens tokens
 
 main = do
   args <- getArgs

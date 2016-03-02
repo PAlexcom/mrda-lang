@@ -9,16 +9,16 @@ import MRDALexer
 
 %token
     int    { TokenInt $$ }
-    '+'    { TokenSymbol '+' }
-    '*'    { TokenSymbol '*' }
-    ';'    { TokenSymbol ';' }
+    '+'    { TokenSymbol ($$, '+') }
+    '*'    { TokenSymbol ($$, '*') }
+    ';'    { TokenSymbol ($$, ';') }
 
 %%
 
 EXP : FACTOR '+' FACTOR ';'  {PlusOP $1 $3}
     | FACTOR '*' FACTOR ';'  {TimesOP $1 $3}
 
-FACTOR : int {Int $1}
+FACTOR : int {Int (snd $1)}
 
 {
 parseError :: [Token] -> a
