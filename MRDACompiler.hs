@@ -4,19 +4,23 @@ import System.Exit ( exitFailure, exitSuccess )
 
 import MRDALexer
 import MRDAParser
+import MRDACodeGenerator
 
-runFile f = putStrLn f >> readFile f >>= run
-run s = do
+compileFile fileName = putStrLn fileName >> readFile fileName >>= compile
+compile text = do
     print ("Tokens")
     print (tokens)
-    print ("Derivation Tree")
-    print (derivationTree)
+    print ("Abstract Syntax Tree")
+    print (abstractSyntaxTree)
+    print ("Code")
+    print (generatedCode)
     where
-        tokens = alexScanTokens s
-        derivationTree = parseTokens tokens
+        tokens = alexScanTokens text
+        abstractSyntaxTree = parseTokens tokens
+        generatedCode = tacGenerator abstractSyntaxTree
 
 main = do
   args <- getArgs
   case args of
-    [] -> hGetContents stdin >>= run
-    fs -> mapM_ (runFile) fs
+    [] -> hGetContents stdin >>= compile
+    fileName -> mapM_ (compileFile) fileName
