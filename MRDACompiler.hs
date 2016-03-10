@@ -12,12 +12,12 @@ compile text = do
     print (tokens)
     print ("Abstract Syntax Tree")
     print (abstractSyntaxTree)
-    print ("Code")
-    print (generatedCode)
+    --print ("Code")
+    --print (generatedCode)
     where
         tokens = alexScanTokens text
         abstractSyntaxTree = parseTokens tokens
-        generatedCode = tacGenerator abstractSyntaxTree
+        --generatedCode = tacGenerator abstractSyntaxTree
 
 main = do
   args <- getArgs
