@@ -16,3 +16,4 @@ cabal.sandbox.config
 .stack-work/
 MRDALexer.hs
 MRDAParser.hs
+*.tac

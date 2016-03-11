@@ -1,7 +1,14 @@
 module MRDACodeGenerator where
 
 import MRDAParser
+import qualified Data.Text as T
 
---tacGenerator :: EXP -> String
---tacGenerator abstractSyntaxTree = case abstractSyntaxTree of
---    PlusOP _ _ -> "plus := x1 + x2"
+sanitizeFileName fileName = fileName ++ ".tac"
+
+tacGenerator abstractSyntaxTree fileName = do
+    print $ "Generating Code in filename " ++ (sanitizeFileName fileName)
+    writeFile (sanitizeFileName fileName) $ createCode abstractSyntaxTree 
+
+createCode abstractSyntaxTree = case abstractSyntaxTree of
+    Program _ _ -> "program"
+    ProgramEmpty -> ""

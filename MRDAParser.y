@@ -50,6 +50,9 @@ EXP : EXP '+' EXP                   {PlusOP $1 $3}
 parseError :: [Token] -> a
 parseError token = error $ "Parse error" ++ (show token)
 
+data ABS = TYPES | DECLARATION | PROGRAM | EXP
+    deriving (Show)
+
 data TYPES = TypeInt | TypeChar | TypeBool
     deriving (Show)
 
