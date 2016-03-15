@@ -45,7 +45,7 @@ PROGRAM : BLOCK PROGRAM     {Program $1 $2}
     | {- empty -}           {ProgramEmpty}
 
 BLOCK : DECLARATION    {BlockDecl $1}
-    | BLOCKIF           {BlockIf $1}
+    | BLOCKIF          {BlockIf $1}
 
 BLOCKIF : 'if' '(' EXP ')' '{' BLOCK '}' 'else' '{' BLOCK '}'     {StatementIfElse $3 $6 $10}
     | 'if' '(' EXP ')' '{' BLOCK '}'                              {StatementIf $3 $6}
@@ -69,19 +69,13 @@ EXP : EXP '==' EXP                  {BoolEqualOp $1 $3}
     | '(' EXP ')'                   {Bracket $2}
     | '-' EXP %prec NEG             {NegateOP $2}
     | int                           {Int (snd $1)}
-    | 'true'                          {TrueVal}
-    | 'false'                         {FalseVal}
+    | 'true'                        {TrueVal}
+    | 'false'                       {FalseVal}
     | var                           {Var (snd $1)}
 
 {
 parseError :: [Token] -> a
 parseError token = error $ "Parse error" ++ (show token)
-
-data ABS = TYPES | DECLARATION | PROGRAM | EXP
-    deriving (Show)
-
-data TYPES = TypeInt | TypeChar | TypeBool
-    deriving (Show)
 
 data PROGRAM = Program BLOCK PROGRAM | ProgramEmpty
     deriving (Show)
@@ -93,6 +87,9 @@ data BLOCKIF = StatementIfElse EXP BLOCK BLOCK | StatementIf EXP BLOCK
     deriving (Show) 
 
 data DECLARATION = DeclarationExp TYPES String EXP
+    deriving (Show)
+
+data TYPES = TypeInt | TypeChar | TypeBool
     deriving (Show)
 
 data EXP = GrtOp EXP EXP
