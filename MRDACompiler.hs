@@ -14,7 +14,7 @@ compile fileName text = do
     print (tokens)
     print ("Abstract Syntax Tree")
     print (abstractSyntaxTree)
-    tacGenerator abstractSyntaxTree fileName
+    tacGenerator abstractSyntaxTree
     where
         tokens = alexScanTokens text
         abstractSyntaxTree = parseTokens tokens

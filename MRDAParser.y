@@ -77,6 +77,9 @@ EXP : EXP '==' EXP                  {BoolEqualOp $1 $3}
 parseError :: [Token] -> a
 parseError token = error $ "Parse error" ++ (show token)
 
+data ABS = PROGRAM | BLOCK | BLOCKIF | DECLARATION | TYPES | EXP
+    deriving (Show)
+
 data PROGRAM = Program BLOCK PROGRAM | ProgramEmpty
     deriving (Show)
 
