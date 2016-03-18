@@ -6,7 +6,7 @@ import System.Exit ( exitFailure, exitSuccess )
 
 import MRDALexer
 import MRDAParser
-import MRDACodeGenerator
+-- import MRDACodeGenerator
 
 compileFile fileName = putStrLn fileName >> readFile fileName >>= compile fileName
 compile fileName text = do
@@ -14,10 +14,10 @@ compile fileName text = do
     print (tokens)
     print ("Abstract Syntax Tree")
     print (abstractSyntaxTree)
-    tacGenerator abstractSyntaxTree
+    -- tacGenerator abstractSyntaxTree
     where
-        tokens = alexScanTokens text
-        abstractSyntaxTree = parseTokens tokens
+        tokens = parseTokens text
+        abstractSyntaxTree = pProgram tokens
 
 main = do
   args <- getArgs

@@ -65,11 +65,11 @@ import Error
   '{'           { Token _ (TokenSymbols "{") }
   '}'           { Token _ (TokenSymbols "}") }
   '||'          { Token _ (TokenSymbols "||") }
-    L_integ     { Token _ (TokenInt _) }
-    L_charac    { Token _ (TokenChar _) }
-    L_quoted    { Token _ (TokenAlpha _) }
-    L_doubl     { Token _ (TokenDouble _) }
-    L_ident     { Token _ (TokenIdent _) }
+    L_integ     { Token _ (TokenInt $$) }
+    L_charac    { Token _ (TokenChar $$) }
+    L_quoted    { Token _ (TokenAlpha $$) }
+    L_doubl     { Token _ (TokenDouble $$) }
+    L_ident     { Token _ (TokenIdent $$) }
 
 %left '||' '&&'
 %left '!'
@@ -177,20 +177,21 @@ Modality : {- empty -} { ModalityEmpty }
          | 'ref' { Modality_ref }
          | 'const' { Modality_const }
          | 'res' { Modality_res }
-         | 'valres' { Modality_valres }
-         | 'name' { Modality_name }
+         | 'valres'                                     { Modality_valres }
+         | 'name'                                       { Modality_name }
 
-CompStmt : CompStmtNocolon ';' { CompStmt1 $1 }
-         | CompStmtNocolon { CompStmtCompStmtNocolon $1 }
+CompStmt : CompStmtNocolon ';'                          { CompStmt1 $1 }
+         | CompStmtNocolon                              { CompStmtCompStmtNocolon $1 }
 
-CompStmtNocolon : '{' ListDecl ListStmt '}' { BlockDecl (reverse $2) (reverse $3) }
+CompStmtNocolon : '{' ListDecl ListStmt '}'             { BlockDecl (reverse $2) (reverse $3) }
 
-ListStmt : {- empty -} { [] } | ListStmt Stmt { flip (:) $1 $2 }
+ListStmt : {- empty -}                                  { [] }
+    | ListStmt Stmt                                     { flip (:) $1 $2 }
 
-Stmt : CompStmt { Comp $1 }
-     | FunCall ';' { ProcCall $1 }
-     | JumpStmt ';' { Jmp $1 }
-     | IterStmt { Iter $1 }
+Stmt : CompStmt                                         { Comp $1 }
+     | FunCall ';'                                      { ProcCall $1 }
+     | JumpStmt ';'                                     { Jmp $1 }
+     | IterStmt                                         { Iter $1 }
      | SelectionStmt { Sel $1 }
      | LExpr Assignment_op RExpr ';' { Assgn $1 $2 $3 }
      | LExpr ';' { LExprStmt $1 }
@@ -210,7 +211,7 @@ SelectionStmt : 'if' '(' RExpr ')' Stmt 'else' Stmt { IfElse $3 $5 $7 }
               | 'if' '(' RExpr ')' Stmt { IfNoElse $3 $5 }
 
 IterStmt : 'while' '(' RExpr ')' Stmt { While $3 $5 }
-         | 'do' Stmt 'while' '(' RExpr ')' ';' { DoWhile $2 $5 }
+         | 'do' Stmt 'while' '(' RExpr ')' ';'          { DoWhile $2 $5 }
 
 
 {

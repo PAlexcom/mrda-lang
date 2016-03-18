@@ -1,4 +1,4 @@
-module ErrM where
+module Error where
 
 -- the Error monad: like Maybe type with error msgs
 

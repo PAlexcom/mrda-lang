@@ -1,5 +1,11 @@
 {
+{-# OPTIONS -fno-warn-incomplete-patterns #-}
+{-# OPTIONS_GHC -w #-}
 module MRDALexer where
+
+import qualified Data.Bits
+import Data.Word (Word8)
+import Data.Char (ord)    
 }
 
 $alpha = [a-zA-Z\192 - \255] # [\215 \247]      -- isolatin1 letter FIXME
@@ -11,8 +17,8 @@ $universal = [\0-\255]                          -- universal: any character
 
 -- symbols and non-identifier-like reserved words
 @reservedSyms =
-    \( | \) | \| \| | \& \& | \! | \= \= | \! \= | \< | \<
-    \= | \> | \> \= | \+ | \- | \* | \/ | \% | \^ | \& |
+    \( | \) | \| \| | \& \& | \! | \= \= | \! \= | \< | \< \= |
+    \> | \> \= | \+ | \- | \* | \/ | \% | \^ | \& |
     \, | \+ \+ | \- \- | \[ | \] | \; | \= | \{ | \} |
     \* \= | \+ \= | \/ \= | \- \=
 
@@ -24,33 +30,33 @@ tokens :-
     $white+                                         ;
 
     @reservedSyms                           {  \p s -> Token p (TokenSymbols s) }
+    $digit+                                 {  \p s -> Token p (TokenInt s) }
+    $digit+ \. $digit+ (e (\-)? $digit+)?   {  \p s -> Token p (TokenDouble s) }
+    "False"                                 {  \p s -> Token p (TokenSymbols s) }
+    "True"                                  {  \p s -> Token p (TokenSymbols s) }
+    "bool"                                  {  \p s -> Token p (TokenSymbols s) }
+    "break"                                 {  \p s -> Token p (TokenSymbols s) }
+    "char"                                  {  \p s -> Token p (TokenSymbols s) }
+    "const"                                 {  \p s -> Token p (TokenSymbols s) }
+    "continue"                              {  \p s -> Token p (TokenSymbols s) }
+    "do"                                    {  \p s -> Token p (TokenSymbols s) }
+    "else"                                  {  \p s -> Token p (TokenSymbols s) }
+    "float"                                 {  \p s -> Token p (TokenSymbols s) }
+    "if"                                    {  \p s -> Token p (TokenSymbols s) }
+    "int"                                   {  \p s -> Token p (TokenSymbols s) }
+    "name"                                  {  \p s -> Token p (TokenSymbols s) }
+    "ref"                                   {  \p s -> Token p (TokenSymbols s) }
+    "res"                                   {  \p s -> Token p (TokenSymbols s) }
+    "return"                                {  \p s -> Token p (TokenSymbols s) }
+    "val"                                   {  \p s -> Token p (TokenSymbols s) }
+    "valres"                                {  \p s -> Token p (TokenSymbols s) }
+    "void"                                  {  \p s -> Token p (TokenSymbols s) }
+    "while"                                 {  \p s -> Token p (TokenSymbols s) }
     $alpha $ident*                          {  \p s -> Token p (TokenIdent s) }
     \" ([$universal # [\" \\ \n]]
         | (\\ (\" | \\ | \' | n | t)))* \"  {  \p s -> Token p (TokenAlpha s) }
     \' ($universal # [\' \\]
-        | \\ [\\ \' n t]) \'                {  \p s -> Token p (TokenChar s)) }
-    $digit+                                 {  \p s -> Token p (TokenInt s)) }
-    $digit+ \. $digit+ (e (\-)? $digit+)?   {  \p s -> Token p (TokenDouble s)) }
-    'False'                                 {  \p s -> Token p (TokenSymbols s) }
-    'True'                                  {  \p s -> Token p (TokenSymbols s) }
-    'bool'                                  {  \p s -> Token p (TokenSymbols s) }
-    'break'                                 {  \p s -> Token p (TokenSymbols s) }
-    'char'                                  {  \p s -> Token p (TokenSymbols s) }
-    'const'                                 {  \p s -> Token p (TokenSymbols s) }
-    'continue'                              {  \p s -> Token p (TokenSymbols s) }
-    'do'                                    {  \p s -> Token p (TokenSymbols s) }
-    'else'                                  {  \p s -> Token p (TokenSymbols s) }
-    'float'                                 {  \p s -> Token p (TokenSymbols s) }
-    'if'                                    {  \p s -> Token p (TokenSymbols s) }
-    'int'                                   {  \p s -> Token p (TokenSymbols s) }
-    'name'                                  {  \p s -> Token p (TokenSymbols s) }
-    'ref'                                   {  \p s -> Token p (TokenSymbols s) }
-    'res'                                   {  \p s -> Token p (TokenSymbols s) }
-    'return'                                {  \p s -> Token p (TokenSymbols s) }
-    'val'                                   {  \p s -> Token p (TokenSymbols s) }
-    'valres'                                {  \p s -> Token p (TokenSymbols s) }
-    'void'                                  {  \p s -> Token p (TokenSymbols s) }
-    'while'                                 {  \p s -> Token p (TokenSymbols s) }
+        | \\ [\\ \' n t]) \'                {  \p s -> Token p (TokenChar s) }
 
 {
 data Tok =
@@ -84,7 +90,7 @@ posLineCol (Pn _ l c) = (l,c)
 
 prToken :: Token -> String
 prToken t = case t of
-    Token _ (TokenSymbols s _) -> s
+    Token _ (TokenSymbols s) -> s
     Token _ (TokenAlpha s)   -> show s
     Token _ (TokenInt s)   -> s
     Token _ (TokenIdent s)   -> s
@@ -115,8 +121,8 @@ type AlexInput = (Posn,     -- current position,
                   [Byte],   -- pending bytes on the current char
                   String)   -- current input string
 
-tokens :: String -> [Token]
-tokens str = go (alexStartPos, '\n', [], str)
+parseTokens :: String -> [Token]
+parseTokens str = go (alexStartPos, '\n', [], str)
     where
       go :: AlexInput -> [Token]
       go inp@(pos, _, _, str) =
@@ -139,24 +145,25 @@ alexGetByte (p, _, [], s) =
 alexInputPrevChar :: AlexInput -> Char
 alexInputPrevChar (p, c, bs, s) = c
 
--- | Encode a Haskell String to a list of Word8 values, in UTF8 format.
+-- utf8Encode function definition
+-- Encodes a Haskell String to a list of Word8 values, in UTF8 format.
+-- If you are using the a wrapper that takes a Haskell String as input,
+-- this function is automatically generated by Alex.
 utf8Encode :: Char -> [Word8]
 utf8Encode = map fromIntegral . go . ord
- where
-  go oc
-   | oc <= 0x7f       = [oc]
-
-   | oc <= 0x7ff      = [ 0xc0 + (oc `Data.BiTokenSymbols.shiftR` 6)
-                        , 0x80 + oc Data.BiTokenSymbols..&. 0x3f
-                        ]
-
-   | oc <= 0xffff     = [ 0xe0 + (oc `Data.BiTokenSymbols.shiftR` 12)
-                        , 0x80 + ((oc `Data.BiTokenSymbols.shiftR` 6) Data.BiTokenSymbols..&. 0x3f)
-                        , 0x80 + oc Data.BiTokenSymbols..&. 0x3f
-                        ]
-   | otherwise        = [ 0xf0 + (oc `Data.BiTokenSymbols.shiftR` 18)
-                        , 0x80 + ((oc `Data.BiTokenSymbols.shiftR` 12) Data.BiTokenSymbols..&. 0x3f)
-                        , 0x80 + ((oc `Data.BiTokenSymbols.shiftR` 6) Data.BiTokenSymbols..&. 0x3f)
-                        , 0x80 + oc Data.BiTokenSymbols..&. 0x3f
-                        ]
+    where
+        go oc
+           | oc <= 0x7f       = [oc]
+           | oc <= 0x7ff      = [ 0xc0 + (oc `Data.Bits.shiftR` 6)
+                                , 0x80 + oc Data.Bits..&. 0x3f
+                                ]
+           | oc <= 0xffff     = [ 0xe0 + (oc `Data.Bits.shiftR` 12)
+                                , 0x80 + ((oc `Data.Bits.shiftR` 6) Data.Bits..&. 0x3f)
+                                , 0x80 + oc Data.Bits..&. 0x3f
+                                ]
+           | otherwise        = [ 0xf0 + (oc `Data.Bits.shiftR` 18)
+                                , 0x80 + ((oc `Data.Bits.shiftR` 12) Data.Bits..&. 0x3f)
+                                , 0x80 + ((oc `Data.Bits.shiftR` 6) Data.Bits..&. 0x3f)
+                                , 0x80 + oc Data.Bits..&. 0x3f
+                                ]
 }
