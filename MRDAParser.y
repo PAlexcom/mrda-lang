@@ -71,11 +71,14 @@ import Error
     L_doubl     { Token _ (TokenDouble _) }
     L_ident     { Token _ (TokenIdent _) }
 
+%left '||' '&&'
+%left '!'
+%nonassoc '<' '>' '<=' '>=' '==' '!='
 %left '+' '-'
 %left '*' '/' '%'
 %right '^'
-%nonassoc '<' '>' '<=' '>=' '==' '!='
 %left NEG '&'
+%left '++' '--'
 %%
 
 Integer :: { Integer } : L_integ  { (read ( $1)) :: Integer }
@@ -203,8 +206,8 @@ JumpStmt : 'break' { Break }
          | 'return' { RetExpVoid }
          | 'return' '(' RExpr ')' { RetExp $3 }
 
-SelectionStmt : 'if' '(' RExpr ')' Stmt { IfNoElse $3 $5 }
-              | 'if' '(' RExpr ')' Stmt 'else' Stmt { IfElse $3 $5 $7 }
+SelectionStmt : 'if' '(' RExpr ')' Stmt 'else' Stmt { IfElse $3 $5 $7 }
+              | 'if' '(' RExpr ')' Stmt { IfNoElse $3 $5 }
 
 IterStmt : 'while' '(' RExpr ')' Stmt { While $3 $5 }
          | 'do' Stmt 'while' '(' RExpr ')' ';' { DoWhile $2 $5 }
