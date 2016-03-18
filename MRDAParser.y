@@ -180,10 +180,7 @@ Modality : {- empty -} { ModalityEmpty }
          | 'valres'                                     { Modality_valres }
          | 'name'                                       { Modality_name }
 
-CompStmt : CompStmtNocolon ';'                          { CompStmt1 $1 }
-         | CompStmtNocolon                              { CompStmtCompStmtNocolon $1 }
-
-CompStmtNocolon : '{' ListDecl ListStmt '}'             { BlockDecl (reverse $2) (reverse $3) }
+CompStmt : '{' ListDecl ListStmt '}'                    { BlockDecl (reverse $2) (reverse $3) }
 
 ListStmt : {- empty -}                                  { [] }
     | ListStmt Stmt                                     { flip (:) $1 $2 }
@@ -215,9 +212,10 @@ IterStmt : 'while' '(' RExpr ')' Stmt { While $3 $5 }
 
 
 {
-newtype Ident = Ident String deriving (Eq, Ord, Show, Read)
+newtype Ident = Ident String
+    deriving (Eq, Ord, Show, Read)
 data Boolean = Boolean_True | Boolean_False
-  deriving (Eq, Ord, Show, Read)
+    deriving (Eq, Ord, Show, Read)
 
 data RExpr
     = Or RExpr RExpr
@@ -305,11 +303,7 @@ data Modality
   deriving (Eq, Ord, Show, Read)
 
 data CompStmt
-    = CompStmt1 CompStmtNocolon
-    | CompStmtCompStmtNocolon CompStmtNocolon
-  deriving (Eq, Ord, Show, Read)
-
-data CompStmtNocolon = BlockDecl [Decl] [Stmt]
+    = BlockDecl [Decl] [Stmt]
   deriving (Eq, Ord, Show, Read)
 
 data Stmt
