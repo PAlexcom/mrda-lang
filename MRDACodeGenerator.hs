@@ -4,7 +4,7 @@ import MRDAParser
 import Control.Monad.State
 
 tacGenerator abstractSyntaxTree = do
-    print $ "Generating Code in filename "
+    print $ "Generating Code in filename"
     print $ finalAttributes
     where
         finalAttributes = execState (code_PROGRAM abstractSyntaxTree) defaultAttributes 
@@ -135,4 +135,8 @@ code_EXP node = case node of
     Var str -> do
         modify (\attr -> attr{addr = str})
         return ()
+
+
+
+        
 
