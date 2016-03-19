@@ -86,27 +86,27 @@ Ident   :: { Ident }   : L_ident  { Ident $1 }
 
 Boolean : 'True'                    { Boolean_True }
     | 'False'                       { Boolean_False }
-BasicType : 'bool'                  { BasicType_bool }
-    | 'char'                        { BasicType_char }
-    | 'float'                       { BasicType_float }
-    | 'int'                         { BasicType_int }
-    | 'void'                        { BasicType_void }
+BasicType : 'bool'                  { BType "bool" }
+    | 'char'                        { BType "char" }
+    | 'float'                       { BType "float" }
+    | 'int'                         { BType "int" }
+    | 'void'                        { BType "void" }
 
-RExpr : RExpr '||' RExpr            { Or $1 $3 }
-    | RExpr '&&' RExpr              { And $1 $3 }
+RExpr : RExpr '||' RExpr            { OpBoolean $1 $3 "||" }
+    | RExpr '&&' RExpr              { OpBoolean $1 $3 "&&" }
     | '!' RExpr                     { Not $2 }
-    | RExpr '==' RExpr              { Eq $1 $3 }
-    | RExpr '!=' RExpr              { Neq $1 $3 }
-    | RExpr '<' RExpr               { Lt $1 $3 }
-    | RExpr '<=' RExpr              { LtE $1 $3 }
-    | RExpr '>' RExpr               { Gt $1 $3 }
-    | RExpr '>=' RExpr              { GtE $1 $3 }
-    | RExpr '+' RExpr               { Add $1 $3 }
-    | RExpr '-' RExpr               { Sub $1 $3 }
-    | RExpr '*' RExpr               { Mul $1 $3 }
-    | RExpr '/' RExpr               { Div $1 $3 }   
-    | RExpr '%' RExpr               { Mod $1 $3 }
-    | RExpr '^' RExpr               { Pow $1 $3 }
+    | RExpr '==' RExpr              { OpRelation $1 $3 "==" }
+    | RExpr '!=' RExpr              { OpRelation $1 $3 "!=" }
+    | RExpr '<' RExpr               { OpRelation $1 $3 "<" }
+    | RExpr '<=' RExpr              { OpRelation $1 $3 "<=" }
+    | RExpr '>' RExpr               { OpRelation $1 $3 ">" }
+    | RExpr '>=' RExpr              { OpRelation $1 $3 ">=" }
+    | RExpr '+' RExpr               { OpAritm $1 $3 "+" }
+    | RExpr '-' RExpr               { OpAritm $1 $3 "-" }
+    | RExpr '*' RExpr               { OpAritm $1 $3 "*" }
+    | RExpr '/' RExpr               { OpAritm $1 $3 "/" }   
+    | RExpr '%' RExpr               { OpAritm $1 $3 "%" }
+    | RExpr '^' RExpr               { OpAritm $1 $3 "^" }
     | '-' RExpr %prec NEG           { Neg $2 }
     | '&' LExpr                     { Ref $2 }
     | FunCall                       { FCall $1 }
@@ -115,7 +115,7 @@ RExpr : RExpr '||' RExpr            { Or $1 $3 }
     | String                        { String $1 }
     | Double                        { Float $1 }
     | Boolean                       { Bool $1 }
-    |'(' RExpr ')'                  { $2 }
+    | '(' RExpr ')'                 { $2 }
     | LExpr                         { Lexpr $1 }
 
 LExpr : '*' RExpr                   { Deref $2 }
@@ -214,21 +214,10 @@ data Boolean = Boolean_True | Boolean_False
     deriving (Eq, Ord, Show, Read)
 
 data RExpr
-    = Or RExpr RExpr
-    | And RExpr RExpr
+    = OpRelation RExpr RExpr String
+    | OpAritm RExpr RExpr String
+    | OpBoolean RExpr RExpr String
     | Not RExpr
-    | Eq RExpr RExpr
-    | Neq RExpr RExpr
-    | Lt RExpr RExpr
-    | LtE RExpr RExpr
-    | Gt RExpr RExpr
-    | GtE RExpr RExpr
-    | Add RExpr RExpr
-    | Sub RExpr RExpr
-    | Mul RExpr RExpr
-    | Div RExpr RExpr
-    | Mod RExpr RExpr
-    | Pow RExpr RExpr
     | Neg RExpr
     | Ref LExpr
     | FCall FunCall
@@ -274,11 +263,7 @@ data TypeSpec
     deriving (Eq, Ord, Show, Read)
 
 data BasicType
-    = BasicType_bool
-    | BasicType_char
-    | BasicType_float
-    | BasicType_int
-    | BasicType_void
+    = BType String
     deriving (Eq, Ord, Show, Read)
 
 data CompoundType
