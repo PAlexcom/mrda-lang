@@ -6,9 +6,6 @@ import Error
 }
 
 %name pProgram Program
-%name pStmt Stmt
-%name pRExpr RExpr
-%name pLExpr LExpr
 
 %monad { Err } { thenM } { returnM }
 %tokentype {Token}
@@ -21,12 +18,12 @@ import Error
     '&&'        { Token _ (TokenSymbols "&&") }
     '('         { Token _ (TokenSymbols "(") }
     ')'         { Token _ (TokenSymbols ")") }
-  '*'           { Token _ (TokenSymbols "*") }
-  '*='          { Token _ (TokenSymbols "*=") }
-  '+'           { Token _ (TokenSymbols "+") }
-  '++'          { Token _ (TokenSymbols "++") }
-  '+='          { Token _ (TokenSymbols "+=") }
-  ','           { Token _ (TokenSymbols ",") }
+    '*'         { Token _ (TokenSymbols "*") }
+    '*='        { Token _ (TokenSymbols "*=") }
+    '+'         { Token _ (TokenSymbols "+") }
+    '++'        { Token _ (TokenSymbols "++") }
+    '+='        { Token _ (TokenSymbols "+=") }
+    ','         { Token _ (TokenSymbols ",") }
   '-'           { Token _ (TokenSymbols "-") }
   '--'          { Token _ (TokenSymbols "--") }
   '-='          { Token _ (TokenSymbols "-=") }
@@ -87,40 +84,39 @@ String  :: { String }  : L_quoted {  $1 }
 Double  :: { Double }  : L_doubl  { (read ( $1)) :: Double }
 Ident   :: { Ident }   : L_ident  { Ident $1 }
 
-Boolean : 'True'            { Boolean_True }
-        | 'False'           { Boolean_False }
+Boolean : 'True'                    { Boolean_True }
+    | 'False'                       { Boolean_False }
+BasicType : 'bool'                  { BasicType_bool }
+    | 'char'                        { BasicType_char }
+    | 'float'                       { BasicType_float }
+    | 'int'                         { BasicType_int }
+    | 'void'                        { BasicType_void }
 
-RExpr : RExpr '||' RExpr   { Or $1 $3 }
-    | RExpr '&&' RExpr    { And $1 $3 }
-    | '!' RExpr            { Not $2 }
-    | RExpr '==' RExpr    { Eq $1 $3 }
-    | RExpr '!=' RExpr    { Neq $1 $3 }
-    | RExpr '<' RExpr     { Lt $1 $3 }
-    | RExpr '<=' RExpr    { LtE $1 $3 }
-    | RExpr '>' RExpr     { Gt $1 $3 }
-    | RExpr '>=' RExpr    { GtE $1 $3 }
-    | RExpr '+' RExpr     { Add $1 $3 }
-    | RExpr '-' RExpr     { Sub $1 $3 }
-    | RExpr '*' RExpr     { Mul $1 $3 }
-    | RExpr '/' RExpr     { Div $1 $3 }
-    | RExpr '%' RExpr     { Mod $1 $3 }
-    | RExpr '^' RExpr    { Pow $1 $3 }
+RExpr : RExpr '||' RExpr            { Or $1 $3 }
+    | RExpr '&&' RExpr              { And $1 $3 }
+    | '!' RExpr                     { Not $2 }
+    | RExpr '==' RExpr              { Eq $1 $3 }
+    | RExpr '!=' RExpr              { Neq $1 $3 }
+    | RExpr '<' RExpr               { Lt $1 $3 }
+    | RExpr '<=' RExpr              { LtE $1 $3 }
+    | RExpr '>' RExpr               { Gt $1 $3 }
+    | RExpr '>=' RExpr              { GtE $1 $3 }
+    | RExpr '+' RExpr               { Add $1 $3 }
+    | RExpr '-' RExpr               { Sub $1 $3 }
+    | RExpr '*' RExpr               { Mul $1 $3 }
+    | RExpr '/' RExpr               { Div $1 $3 }   
+    | RExpr '%' RExpr               { Mod $1 $3 }
+    | RExpr '^' RExpr               { Pow $1 $3 }
     | '-' RExpr %prec NEG           { Neg $2 }
-    | '&' LExpr             { Ref $2 }
-    | FunCall               { FCall $1 }
-    | Integer               { Int $1 }
-    | Char                  { Char $1 }
-    | String                { String $1 }
-    | Double                { Float $1 }
-    | Boolean               { Bool $1 }
-    |'(' RExpr ')'          { $2 }
-    | LExpr                 { Lexpr $1 }
-
-FunCall : Ident '(' ListRExpr ')'   { Call $1 $3 }
-
-ListRExpr : {- empty -}             { [] }
-          | RExpr                   { (:[]) $1 }
-          | RExpr ',' ListRExpr     { (:) $1 $3 }
+    | '&' LExpr                     { Ref $2 }
+    | FunCall                       { FCall $1 }
+    | Integer                       { Int $1 }
+    | Char                          { Char $1 }
+    | String                        { String $1 }
+    | Double                        { Float $1 }
+    | Boolean                       { Bool $1 }
+    |'(' RExpr ')'                  { $2 }
+    | LExpr                         { Lexpr $1 }
 
 LExpr : '*' RExpr                   { Deref $2 }
     | '++' LExpr                    { PreInc $2 }
@@ -130,13 +126,19 @@ LExpr : '*' RExpr                   { Deref $2 }
     | '(' LExpr ')'                 { $2 }
     | BLExpr                        { BasLExpr $1 }
 
+FunCall : Ident '(' ListRExpr ')'   { Call $1 $3 }
+
+ListRExpr : {- empty -}             { [] }
+          | RExpr                   { (:[]) $1 }
+          | RExpr ',' ListRExpr     { (:) $1 $3 }
+
 BLExpr : BLExpr '[' RExpr ']'       { ArrayEl $1 $3 }
     | Ident                         { Id $1 }
 
-Program : ListDecl                  { Prog (reverse $1) }
+Program : ListDecl                                      { Prog (reverse $1) }
 
-ListDecl : {- empty -}              { [] }
-    | ListDecl Decl                 { flip (:) $1 $2 }
+ListDecl : {- empty -}                                  { [] }
+    | ListDecl Decl                                     { flip (:) $1 $2 }
 
 Decl : BasicType ListVarDeclInit ';'                    { DvarBInit $1 $2 }
     | TypeSpec ListVarDeclInit ';'                      { DvarCInit $1 $2 }
@@ -145,14 +147,8 @@ Decl : BasicType ListVarDeclInit ';'                    { DvarBInit $1 $2 }
 ListVarDeclInit : VarDeclInit                           { (:[]) $1 }
     | VarDeclInit ',' ListVarDeclInit                   { (:) $1 $3 }
 
-TypeSpec : BasicType                { BasTyp $1 }
-    | CompoundType                  { CompType $1 }
-
-BasicType : 'bool'                  { BasicType_bool }
-    | 'char'                        { BasicType_char }
-    | 'float'                       { BasicType_float }
-    | 'int'                         { BasicType_int }
-    | 'void'                        { BasicType_void }
+TypeSpec : BasicType                                    { BasTyp $1 }
+    | CompoundType                                      { CompType $1 }
 
 CompoundType : TypeSpec '[' Integer ']'                 { ArrDef $1 $3 }
     | TypeSpec '[' ']'                                  { ArrUnDef $1 }
@@ -172,13 +168,13 @@ ListParameter : {- empty -}                             { [] }
 
 Parameter : Modality TypeSpec Ident                     { Param $1 $2 $3 }
 
-Modality : {- empty -} { ModalityEmpty }
-         | 'val' { Modality_val }
-         | 'ref' { Modality_ref }
-         | 'const' { Modality_const }
-         | 'res' { Modality_res }
-         | 'valres'                                     { Modality_valres }
-         | 'name'                                       { Modality_name }
+Modality : {- empty -}                                  { ModalityEmpty }
+    | 'val'                                             { Modality_val }
+    | 'ref'                                             { Modality_ref }
+    | 'const'                                           { Modality_const }
+    | 'res'                                             { Modality_res }
+    | 'valres'                                          { Modality_valres }
+    | 'name'                                            { Modality_name }
 
 CompStmt : '{' ListDecl ListStmt '}'                    { BlockDecl (reverse $2) (reverse $3) }
 
@@ -189,26 +185,26 @@ Stmt : CompStmt                                         { Comp $1 }
      | FunCall ';'                                      { ProcCall $1 }
      | JumpStmt ';'                                     { Jmp $1 }
      | IterStmt                                         { Iter $1 }
-     | SelectionStmt { Sel $1 }
-     | LExpr Assignment_op RExpr ';' { Assgn $1 $2 $3 }
-     | LExpr ';' { LExprStmt $1 }
+     | SelectionStmt                                    { Sel $1 }
+     | LExpr Assignment_op RExpr ';'                    { Assgn $1 $2 $3 }
+     | LExpr ';'                                        { LExprStmt $1 }
 
-Assignment_op : '=' { Assign }
-              | '*=' { AssgnMul }
-              | '+=' { AssgnAdd }
-              | '/=' { AssgnDiv }
-              | '-=' { AssgnSub }
+Assignment_op : '='                                     { Assign }
+    | '*='                                              { AssgnMul }
+    | '+='                                              { AssgnAdd }
+    | '/='                                              { AssgnDiv }
+    | '-='                                              { AssgnSub }
 
-JumpStmt : 'break' { Break }
-         | 'continue' { Continue }
-         | 'return' { RetExpVoid }
-         | 'return' '(' RExpr ')' { RetExp $3 }
+JumpStmt : 'break'                                      { Break }
+    | 'continue'                                        { Continue }
+    | 'return'                                          { RetExpVoid }
+    | 'return' '(' RExpr ')'                            { RetExp $3 }
 
-SelectionStmt : 'if' '(' RExpr ')' Stmt 'else' Stmt { IfElse $3 $5 $7 }
-              | 'if' '(' RExpr ')' Stmt { IfNoElse $3 $5 }
+SelectionStmt : 'if' '(' RExpr ')' Stmt 'else' Stmt     { IfElse $3 $5 $7 }
+    | 'if' '(' RExpr ')' Stmt                           { IfNoElse $3 $5 }
 
-IterStmt : 'while' '(' RExpr ')' Stmt { While $3 $5 }
-         | 'do' Stmt 'while' '(' RExpr ')' ';'          { DoWhile $2 $5 }
+IterStmt : 'while' '(' RExpr ')' Stmt                   { While $3 $5 }
+    | 'do' Stmt 'while' '(' RExpr ')' ';'               { DoWhile $2 $5 }
 
 
 {
@@ -242,10 +238,11 @@ data RExpr
     | Float Double
     | Bool Boolean
     | Lexpr LExpr
-  deriving (Eq, Ord, Show, Read)
+    deriving (Eq, Ord, Show, Read)
 
-data FunCall = Call Ident [RExpr]
-  deriving (Eq, Ord, Show, Read)
+data FunCall
+    = Call Ident [RExpr]
+    deriving (Eq, Ord, Show, Read)
 
 data LExpr
     = Deref RExpr
@@ -254,22 +251,27 @@ data LExpr
     | PostInc LExpr
     | PostDecr LExpr
     | BasLExpr BLExpr
-  deriving (Eq, Ord, Show, Read)
+    deriving (Eq, Ord, Show, Read)
 
-data BLExpr = ArrayEl BLExpr RExpr | Id Ident
-  deriving (Eq, Ord, Show, Read)
+data BLExpr
+    = ArrayEl BLExpr RExpr
+    | Id Ident
+    deriving (Eq, Ord, Show, Read)
 
-data Program = Prog [Decl]
-  deriving (Eq, Ord, Show, Read)
+data Program =
+    Prog [Decl]
+    deriving (Eq, Ord, Show, Read)
 
 data Decl
     = DvarBInit BasicType [VarDeclInit]
     | DvarCInit TypeSpec [VarDeclInit]
     | Dfun BasicType Ident [Parameter] CompStmt
-  deriving (Eq, Ord, Show, Read)
+    deriving (Eq, Ord, Show, Read)
 
-data TypeSpec = BasTyp BasicType | CompType CompoundType
-  deriving (Eq, Ord, Show, Read)
+data TypeSpec
+    = BasTyp BasicType
+    | CompType CompoundType
+    deriving (Eq, Ord, Show, Read)
 
 data BasicType
     = BasicType_bool
@@ -277,20 +279,26 @@ data BasicType
     | BasicType_float
     | BasicType_int
     | BasicType_void
-  deriving (Eq, Ord, Show, Read)
+    deriving (Eq, Ord, Show, Read)
 
 data CompoundType
-    = ArrDef TypeSpec Integer | ArrUnDef TypeSpec | Pointer TypeSpec
-  deriving (Eq, Ord, Show, Read)
+    = ArrDef TypeSpec Integer
+    | ArrUnDef TypeSpec
+    | Pointer TypeSpec
+    deriving (Eq, Ord, Show, Read)
 
-data VarDeclInit = VarDeclIn Ident ComplexRExpr
-  deriving (Eq, Ord, Show, Read)
+data VarDeclInit
+    = VarDeclIn Ident ComplexRExpr
+    deriving (Eq, Ord, Show, Read)
 
-data ComplexRExpr = Simple RExpr | Array [ComplexRExpr]
-  deriving (Eq, Ord, Show, Read)
+data ComplexRExpr
+    = Simple RExpr
+    | Array [ComplexRExpr]
+    deriving (Eq, Ord, Show, Read)
 
-data Parameter = Param Modality TypeSpec Ident
-  deriving (Eq, Ord, Show, Read)
+data Parameter
+    = Param Modality TypeSpec Ident
+    deriving (Eq, Ord, Show, Read)
 
 data Modality
     = ModalityEmpty
@@ -300,11 +308,11 @@ data Modality
     | Modality_res
     | Modality_valres
     | Modality_name
-  deriving (Eq, Ord, Show, Read)
+    deriving (Eq, Ord, Show, Read)
 
 data CompStmt
     = BlockDecl [Decl] [Stmt]
-  deriving (Eq, Ord, Show, Read)
+    deriving (Eq, Ord, Show, Read)
 
 data Stmt
     = Comp CompStmt
@@ -314,7 +322,7 @@ data Stmt
     | Sel SelectionStmt
     | Assgn LExpr Assignment_op RExpr
     | LExprStmt LExpr
-  deriving (Eq, Ord, Show, Read)
+    deriving (Eq, Ord, Show, Read)
 
 data Assignment_op
     = Assign
@@ -325,10 +333,14 @@ data Assignment_op
     | AssgnPow
     | AssgnAnd
     | AssgnOr
-  deriving (Eq, Ord, Show, Read)
+    deriving (Eq, Ord, Show, Read)
 
-data JumpStmt = Break | Continue | RetExpVoid | RetExp RExpr
-  deriving (Eq, Ord, Show, Read)
+data JumpStmt
+    = Break
+    | Continue
+    | RetExpVoid
+    | RetExp RExpr
+    deriving (Eq, Ord, Show, Read)
 
 data SelectionStmt = IfNoElse RExpr Stmt | IfElse RExpr Stmt Stmt
   deriving (Eq, Ord, Show, Read)

@@ -1,7 +1,0 @@
-bool x = True, y = False;
-
-int functionName (val int param1Name, val char param2Name) {
-    float z = 13;
-    void h = "asdstring";
-    functionName(z, h);
-}

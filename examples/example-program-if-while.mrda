@@ -1,9 +1,0 @@
-void main(){
-    if(5){
-        char k='k';
-        return(5);
-    }
-    else {
-        char k2 = "asdString";
-    }
-}

@@ -18,3 +18,4 @@ cabal.sandbox.config
 MRDALexer.hs
 MRDAParser.hs
 *.tac
+*.info

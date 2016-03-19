@@ -1,0 +1,34 @@
+// Basic Declaration
+int c = 5 + 6;
+int x = 5 + 6, y = 5 * 4, z = 5 / 4;
+
+// Compound Declaration
+char[4] s = ['a', 'b', 'c', 'd'];
+bool *p = True;
+
+// Function Declaration
+int func(val int a, res bool b, name char d, const float n, ref bool l) {
+    // Basic Declaration
+    int counter = a;
+    int z = proc(counter, b);
+    counter = a;
+
+    // Iteration Statement
+    while (b == True) {
+        // Function Call
+        int z = proc(counter, b);
+    }
+
+    // Selection Statement
+    if (proc(counter, b) >= 8) {
+        int counter = 2;
+    } else {
+        int counter = 4;
+    }
+
+    // Left Expression Declaration
+    ++counter;
+
+    // Jump Statement
+    return (1+1);
+}
