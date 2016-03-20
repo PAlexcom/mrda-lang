@@ -7,6 +7,8 @@ import System.Exit ( exitFailure, exitSuccess )
 import MRDALexer
 import MRDAParser
 -- import MRDACodeGenerator
+import MRDATypeChecker
+import Error
 
 compileFile fileName = putStrLn fileName >> readFile fileName >>= compile fileName
 compile fileName text = do
@@ -14,6 +16,15 @@ compile fileName text = do
     print (tokens)
     print ("Abstract Syntax Tree")
     print (abstractSyntaxTree)
+    case abstractSyntaxTree of
+        Bad msg -> do
+            print (msg)
+        Ok abst -> do
+            print ("Type Checking")
+            print (isTypeCheckOk)
+            where
+                isTypeCheckOk = typeChecking abst
+
     -- tacGenerator abstractSyntaxTree
     where
         tokens = parseTokens text

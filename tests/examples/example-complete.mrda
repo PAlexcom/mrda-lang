@@ -4,7 +4,7 @@ int x = 5 + 6, y = 5 * 4, z = 5 / 4;
 
 // Compound Declaration
 char[4] s = ['a', 'b', 'c', 'd'];
-bool *p = True;
+bool a = True;
 
 // Function Declaration
 int func(val int a, res bool b, name char d, const float n, ref bool l) {
