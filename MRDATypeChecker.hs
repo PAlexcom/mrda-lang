@@ -4,9 +4,20 @@ import MRDAParser
 import Control.Monad.State
 import Error
 
+data Enviroment = Env {
+        vars :: [VarElem],
+        arrays :: [ArrayElem],
+        funcs :: [FuncElem],
+        parent :: Enviroment
+    }
+    | FuncElem {ident :: String, tp :: String}
+    | VarElem {ident :: String, tp :: String}
+    | ArrayElem {ident :: String, tp :: String, dim :: Int}
+deriving (Show, Eq)
+
 data Attributes = Attributes {
     isError :: Err String,
-    env :: [(String, String, Int)],
+    env :: Enviroment,
     counter :: Int,
     levelCounter :: Int
 } deriving (Show)
@@ -30,10 +41,21 @@ setError msg = do
     modify (\attr -> attr {isError = Bad msg})
     return ()
 
-pushToEnv :: Ident -> Err String -> State Attributes ()
-pushToEnv (Ident ident) (Ok tp) = do
-    modify (\attr -> attr {env = (ident, tp, levelCounter attr) : (env attr)})
-    return ()
+pushToEnv :: Enviroment -> State Attributes ()
+pushToEnv envElem = case envElem of
+    FuncElem ident tp -> do
+        return ()
+    ArrayElem entry -> do
+        return ()
+    VarElem entry -> do
+
+        return ()
+    Env var  -> do
+        -- insertisci nel parent
+        return ()
+
+
+
 
 ------------------------------------------------------------
 --------- Type Checker -------------------------------------
@@ -121,7 +143,7 @@ check_VarDeclInit tp node = case node of
     VarDeclIn ident complexRExpr -> do
         case (checkTypes tp tpRexpr) of
             Bad msg -> setError msg
-            Ok _ -> pushToEnv ident tp
+            Ok _ -> pushToEnv $ VarElem ident tp
         return ()
         where
             tpRexpr = check_ComplexRExpr complexRExpr
