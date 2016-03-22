@@ -21,13 +21,9 @@ data Enviroment
     deriving (Show)
 
 data EnviromentElement
-    =  FuncElem {ident :: String, tp :: String, params :: [FuncParam]}
+    =  FuncElem {ident :: String, tp :: String, params :: [String]}
     | VarElem {ident :: String, tp :: String}
     | ArrayElem {ident :: String, tp :: String, dim :: Int}
-    deriving (Show, Eq)
-
-data FuncParam
-    = ParamElem {identp :: String, tpp :: String}
     deriving (Show, Eq)
 
 ------------------------------------------------------------
@@ -68,10 +64,10 @@ pushToEnv envElem = case envElem of
         modify (\attr -> attr {env = currentEnv {vars = envElem : (vars currentEnv)}})
         return ()
 
-serializeEnvParameters :: [Parameter] -> [FuncParam]
+serializeEnvParameters :: [Parameter] -> [String]
 serializeEnvParameters [] = []
 serializeEnvParameters ((Param _ tp ident):params)
-    = (ParamElem (getIdent ident) (getTypeSpec tp)) : serializeEnvParameters params
+    = (getTypeSpec tp) : serializeEnvParameters params
 
 getIdent :: Ident -> String
 getIdent (Ident ident) = ident
@@ -135,6 +131,24 @@ checkTypesFakeSafe = Ok "null"
 checkTypesFake :: String
 checkTypesFake = "null"
 
+isFuncInEnv :: String -> Enviroment -> Maybe [String]
+isFuncInEnv funcName env = case match of
+    Just params -> Just params
+    Nothing -> case parentEnv of
+        Just parent -> isFuncInEnv funcName parent
+        Nothing -> Nothing
+    where
+        parentEnv = parent env
+        funcsEnv = funcs env
+        match = isFuncInFuncs funcName funcsEnv
+
+isFuncInFuncs :: String -> [EnviromentElement] -> Maybe [String]
+isFuncInFuncs funcName [] = Nothing
+
+isFuncInFuncs funcName ((FuncElem ident tp params):funcs) = if funcName == ident
+    then Just params
+    else isFuncInFuncs funcName funcs
+
 ------------------------------------------------------------
 --------- Parser ABS ---------------------------------------
 ------------------------------------------------------------
@@ -170,8 +184,70 @@ check_Decl node = case node of
         where
             tp = getTypeSpecSafe typeSpec
     Dfun basicType ident parameters compStmt -> do
+        -- TODO creare un nuovo ambiente
         pushToEnv $ FuncElem (getIdent ident) (getBasicType basicType) (serializeEnvParameters parameters)
         return ()
+
+check_CompStmt :: CompStmt -> State Attributes ()
+check_CompStmt (BlockDecl decls stmts) = do
+    check_Decls decls
+    check_Stmts stmts
+    return ()
+
+check_Stmts :: [Stmt] -> State Attributes ()
+check_Stmts (x:xs) = do
+    check_Stmt x
+    check_Stmts xs
+    return ()
+
+check_Stmts [] = do
+    return ()
+
+check_Stmt :: Stmt -> State Attributes ()
+check_Stmt node = case node of
+    Comp compStmt -> do
+        check_CompStmt compStmt
+        return ()
+    ProcCall funCall -> do
+        check_FunCall funCall
+        return ()
+    Jmp jumpStmt -> do
+        return ()
+    Iter iterStmt -> do
+        return ()
+    Sel selectionStmt -> do
+        return ()
+    Assgn lExpr assignment_op rExpr -> do
+        return ()
+    LExprStmt lExpr -> do
+        return ()
+
+check_FunCall :: FunCall -> State Attributes ()
+check_FunCall (Call ident rExprs) = do
+    env <- gets env
+    case (isFuncInEnv funcName env) of
+        Just params -> do
+            case (check_RExprs rExprs params) of
+                Ok tp -> do
+                    return ()
+                Bad msg -> do
+                    setError ("Error in procedure call: " ++ funcName ++ " error: " ++ msg)
+                    return ()
+            return ()
+        Nothing -> do
+            setError ("Function: " ++ funcName ++ " is not declared in the scope")
+            return ()
+    return ()
+    where
+        funcName = getIdent ident
+
+check_RExprs :: [RExpr] -> [String] -> Err String
+check_RExprs [] [] = Ok ""
+check_RExprs (x:xs) [] = Bad "different function arguments number"
+check_RExprs [] (x:xs) = Bad "different function arguments number"
+check_RExprs (rExpr:rExprs) (param:params) = 
+    where
+        rExprTp = check_RExpr rExpr
 
 check_VarDeclInits :: Err String -> [VarDeclInit] -> State Attributes ()
 check_VarDeclInits tp [] = do
