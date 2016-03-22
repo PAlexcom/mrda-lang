@@ -64,6 +64,15 @@ pushToEnv envElem = case envElem of
         modify (\attr -> attr {env = currentEnv {vars = envElem : (vars currentEnv)}})
         return ()
 
+pushToEnvFuncParams :: [Parameter] -> State Attributes ()
+pushToEnvFuncParams [] = do
+    return ()
+pushToEnvFuncParams ((Param _ tp ident):params) = do
+    -- TODO controllare che non ci sono duplicati o clash di nomi
+    -- TODO quando vengono gestiti gli array creare la struttura dati ArrayElem
+    pushToEnv $ VarElem (getIdent ident) (getTypeSpec tp)
+    return ()
+
 serializeEnvParameters :: [Parameter] -> [String]
 serializeEnvParameters [] = []
 serializeEnvParameters ((Param _ tp ident):params)
@@ -186,6 +195,7 @@ check_Decl node = case node of
     Dfun basicType ident parameters compStmt -> do
         -- TODO creare un nuovo ambiente
         pushToEnv $ FuncElem (getIdent ident) (getBasicType basicType) (serializeEnvParameters parameters)
+        pushToEnvFuncParams parameters
         check_CompStmt compStmt
         return ()
 
