@@ -4,17 +4,6 @@ import MRDAParser
 import Control.Monad.State
 import Error
 
-data Enviroment = Env {
-        vars :: [VarElem],
-        arrays :: [ArrayElem],
-        funcs :: [FuncElem],
-        parent :: Enviroment
-    }
-    | FuncElem {ident :: String, tp :: String}
-    | VarElem {ident :: String, tp :: String}
-    | ArrayElem {ident :: String, tp :: String, dim :: Int}
-deriving (Show, Eq)
-
 data Attributes = Attributes {
     isError :: Err String,
     env :: Enviroment,
@@ -22,13 +11,30 @@ data Attributes = Attributes {
     levelCounter :: Int
 } deriving (Show)
 
+data Enviroment 
+    = Env {
+        vars :: [EnviromentElement],
+        arrays :: [EnviromentElement],
+        funcs :: [EnviromentElement],
+        parent :: Maybe Enviroment
+    }
+    deriving (Show)
+
+data EnviromentElement
+    =  FuncElem {ident :: String, tp :: String, params :: [FuncParam]}
+    | VarElem {ident :: String, tp :: String}
+    | ArrayElem {ident :: String, tp :: String, dim :: Int}
+    deriving (Show, Eq)
+
+data FuncParam
+    = ParamElem {identp :: String, tpp :: String}
+    deriving (Show, Eq)
+
 ------------------------------------------------------------
 --------- Utilities ----------------------------------------
 ------------------------------------------------------------
-getPrimitiveType :: BasicType -> Err String
-getPrimitiveType (BType basicType) = Ok basicType
 
-defaultAttributes = Attributes (Ok "") [] 0 0
+defaultAttributes = Attributes (Ok "") (Env [] [] [] Nothing) 0 0
 
 increaseCounter :: Attributes -> Attributes
 increaseCounter attr = attr {counter = (counter attr) + 1}
@@ -41,21 +47,54 @@ setError msg = do
     modify (\attr -> attr {isError = Bad msg})
     return ()
 
-pushToEnv :: Enviroment -> State Attributes ()
+setParentEnv :: State Attributes ()
+setParentEnv = do
+    oldEnv <- gets env
+    modify (\attr -> attr {env = (Env {vars = [], arrays = [], funcs = [], parent = Just oldEnv})})
+    return ()
+
+pushToEnv :: EnviromentElement -> State Attributes ()
 pushToEnv envElem = case envElem of
-    FuncElem ident tp -> do
+    FuncElem _ _ _-> do
+        currentEnv <- gets env
+        modify (\attr -> attr {env = currentEnv {funcs = envElem : (funcs currentEnv)}})
         return ()
-    ArrayElem entry -> do
+    ArrayElem _ _ _ -> do
+        currentEnv <- gets env
+        modify (\attr -> attr {env = currentEnv {arrays = envElem : (arrays currentEnv)}})
         return ()
-    VarElem entry -> do
-
-        return ()
-    Env var  -> do
-        -- insertisci nel parent
+    VarElem _ _ -> do
+        currentEnv <- gets env
+        modify (\attr -> attr {env = currentEnv {vars = envElem : (vars currentEnv)}})
         return ()
 
+serializeEnvParameters :: [Parameter] -> [FuncParam]
+serializeEnvParameters [] = []
+serializeEnvParameters ((Param _ tp ident):params)
+    = (ParamElem (getIdent ident) (getTypeSpec tp)) : serializeEnvParameters params
 
+getIdent :: Ident -> String
+getIdent (Ident ident) = ident
 
+getBasicType :: BasicType -> String
+getBasicType (BType tp) = tp
+
+getBasicTypeSafe :: BasicType -> Err String
+getBasicTypeSafe tp = Ok (getBasicType tp)
+
+getTypeSpec :: TypeSpec -> String
+getTypeSpec node = case node of
+    BasTyp basicType -> getBasicType basicType
+    CompType compoundType -> getCompoundType compoundType
+
+getTypeSpecSafe :: TypeSpec -> Err String
+getTypeSpecSafe node = Ok (getTypeSpec node)
+
+getCompoundType :: CompoundType -> String
+getCompoundType node = case node of
+    ArrDef typeSpec integer -> checkTypesFake -- TODO
+    ArrUnDef typeSpec -> checkTypesFake -- TODO
+    Pointer typeSpec -> checkTypesFake -- TODO
 
 ------------------------------------------------------------
 --------- Type Checker -------------------------------------
@@ -90,8 +129,11 @@ checkAritmTypes first second = case check of
 checkRelTypes :: Err String -> Err String -> Err String
 checkRelTypes first second = checkAritmTypes first second
 
-checkTypesFake :: Err String
-checkTypesFake = Ok "null"
+checkTypesFakeSafe :: Err String
+checkTypesFakeSafe = Ok "null"
+
+checkTypesFake :: String
+checkTypesFake = "null"
 
 ------------------------------------------------------------
 --------- Parser ABS ---------------------------------------
@@ -121,15 +163,17 @@ check_Decl node = case node of
         check_VarDeclInits tp varDeclInits
         return ()
         where
-            tp = getPrimitiveType basicType
+            tp = getBasicTypeSafe basicType
     DvarCInit typeSpec varDeclInits -> do
         check_VarDeclInits tp varDeclInits
         return ()
         where
-            tp = check_TypeSpec typeSpec
+            tp = getTypeSpecSafe typeSpec
     Dfun basicType ident parameters compStmt -> do
+        pushToEnv $ FuncElem (getIdent ident) (getBasicType basicType) (serializeEnvParameters parameters)
         return ()
 
+check_VarDeclInits :: Err String -> [VarDeclInit] -> State Attributes ()
 check_VarDeclInits tp [] = do
     return ()
 
@@ -143,7 +187,7 @@ check_VarDeclInit tp node = case node of
     VarDeclIn ident complexRExpr -> do
         case (checkTypes tp tpRexpr) of
             Bad msg -> setError msg
-            Ok _ -> pushToEnv $ VarElem ident tp
+            Ok tp1 -> pushToEnv (VarElem (getIdent ident) tp1)
         return ()
         where
             tpRexpr = check_ComplexRExpr complexRExpr
@@ -151,7 +195,7 @@ check_VarDeclInit tp node = case node of
 check_ComplexRExpr :: ComplexRExpr -> Err String
 check_ComplexRExpr node = case node of
     Simple rExpr -> check_RExpr rExpr
-    Array complexRExpr -> checkTypesFake
+    Array complexRExpr -> checkTypesFakeSafe
 
 check_RExpr :: RExpr -> Err String
 check_RExpr node = case node of
@@ -169,23 +213,12 @@ check_RExpr node = case node of
             tp2 = check_RExpr rExpr2
     Not rExpr -> check_RExpr rExpr
     Neg rExpr -> check_RExpr rExpr
-    Ref lExpr -> checkTypesFake  -- FIXME in case of any type, fixit later
-    FCall funCall -> checkTypesFake -- TODO
+    Ref lExpr -> checkTypesFakeSafe  -- FIXME in case of any type, fixit later
+    FCall funCall -> checkTypesFakeSafe -- TODO
     Int integer -> Ok "int"
     Char char -> Ok "char"
     String string -> Ok "string"
     Float double -> Ok "float"
     Bool boolean -> Ok "bool"
-    Lexpr lExpr -> checkTypesFake -- TODO
-
-check_TypeSpec :: TypeSpec -> Err String
-check_TypeSpec node = case node of
-    BasTyp basicType -> getPrimitiveType basicType
-    CompType compoundType -> check_CompoundType compoundType
-
-check_CompoundType :: CompoundType -> Err String
-check_CompoundType node = case node of
-    ArrDef typeSpec integer -> checkTypesFake -- TODO
-    ArrUnDef typeSpec -> checkTypesFake -- TODO
-    Pointer typeSpec -> checkTypesFake -- TODO
+    Lexpr lExpr -> checkTypesFakeSafe -- TODO
 
