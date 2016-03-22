@@ -186,6 +186,7 @@ check_Decl node = case node of
     Dfun basicType ident parameters compStmt -> do
         -- TODO creare un nuovo ambiente
         pushToEnv $ FuncElem (getIdent ident) (getBasicType basicType) (serializeEnvParameters parameters)
+        check_CompStmt compStmt
         return ()
 
 check_CompStmt :: CompStmt -> State Attributes ()
@@ -245,9 +246,11 @@ check_RExprs :: [RExpr] -> [String] -> Err String
 check_RExprs [] [] = Ok ""
 check_RExprs (x:xs) [] = Bad "different function arguments number"
 check_RExprs [] (x:xs) = Bad "different function arguments number"
-check_RExprs (rExpr:rExprs) (param:params) = 
-    where
-        rExprTp = check_RExpr rExpr
+check_RExprs (rExpr:rExprs) (param:params) = case (check_RExpr rExpr) of
+    Ok tp -> if tp == param
+        then Ok ""
+        else Bad "argument types are not equal"
+    Bad msg -> Bad msg
 
 check_VarDeclInits :: Err String -> [VarDeclInit] -> State Attributes ()
 check_VarDeclInits tp [] = do
