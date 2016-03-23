@@ -3,11 +3,7 @@ module MRDACodeGenerator where
 import MRDAParser
 import Control.Monad.State
 
-tacGenerator abstractSyntaxTree = do
-    print $ "Generating Code in filename"
-    print $ finalAttributes
-    where
-        finalAttributes = execState (code_Program abstractSyntaxTree) defaultAttributes 
+tacGenerator abstractSyntaxTree = execState (code_Program abstractSyntaxTree) defaultAttributes
 
 data Attributes = Attributes {
     code :: String,
@@ -44,7 +40,7 @@ code_Program (Prog decls) = do
     modify increaseCounterLab
     label <- gets counterLab
     code_Decls decls
-    modify (\attr -> attr{code = (code attr) ++ "L" ++ (show label) ++ ":halt"})
+    modify (\attr -> attr{code = (code attr) ++ "L" ++ (show label) ++ ":halt" ++ "\n"})
     return ()
 
 code_Decls :: [Decl] -> State Attributes ()
@@ -65,9 +61,9 @@ code_Decl node = case node of
         code_VarDeclInits varDeclInits
         return ()
     Dfun _ ident parameters compStmt -> do
-        -- TODO creare un nuovo ambiente
-        --pushToEnv $ FuncElem (getIdent ident) (getBasicType basicType) (serializeEnvParameters parameters)
-        --check_CompStmt compStmt
+        modify (\attr -> attr{code = (code attr) ++ (getIdent ident) ++ "BeginFunc" ++ "\n"})
+        code_CompStmt compStmt
+        modify (\attr -> attr{code = (code attr) ++ "EndFunc" ++ "\n"})
         return ()
 
 code_CompStmt :: CompStmt -> State Attributes ()
@@ -89,7 +85,7 @@ code_Stmts (x:xs) next = do
     label <- gets counterLab
     modify (\attr -> attr{next = ("L" ++ (show label))})
     code_Stmt x
-    modify (\attr -> attr{code = (code attr) ++ "L" ++ (show label)})
+    modify (\attr -> attr{code = (code attr) ++ "L" ++ (show label) ++ "\n"})
     code_Stmts xs next
     return ()
 
@@ -102,6 +98,7 @@ code_Stmt node = case node of
         code_CompStmt compStmt
         return ()
     ProcCall funCall -> do
+
         return ()
     Jmp jumpStmt -> do
         return ()
@@ -125,14 +122,14 @@ code_IterStmt node = case node of
         modify increaseCounterLab
         labelTT <- gets counterLab
         modify (\attr -> attr{ttff = ("L" ++ (show labelTT), next)})
-        modify (\attr -> attr{code = (code attr) ++ "L" ++ (show begin)})
+        modify (\attr -> attr{code = (code attr) ++ "L" ++ (show begin) ++ "\n"})
         modify (\attr -> attr{isSelection = True})
         code_RExpr rExpr
         modify (\attr -> attr{isSelection = False})
-        modify (\attr -> attr{code = (code attr) ++ "L" ++ (show labelTT)})
+        modify (\attr -> attr{code = (code attr) ++ "L" ++ (show labelTT) ++ "\n"})
         modify (\attr -> attr{next = ("L" ++ (show begin))})
         code_Stmt stmt
-        modify (\attr -> attr{code = (code attr) ++ "goto L" ++ (show labelTT)})
+        modify (\attr -> attr{code = (code attr) ++ "goto L" ++ (show labelTT) ++ "\n"})
         return ()
     DoWhile stmt rExpr -> do
         return ()
@@ -147,7 +144,7 @@ code_SelectionStmt node = case node of
         modify (\attr -> attr{isSelection = True})
         code_RExpr rExpr
         modify (\attr -> attr{isSelection = False})
-        modify (\attr -> attr{code = (code attr) ++ "L" ++ (show label)})
+        modify (\attr -> attr{code = (code attr) ++ "L" ++ (show label) ++ "\n"})
         code_Stmt stmt
         return ()
     IfElse rExpr stmt1 stmt2 -> do
@@ -160,10 +157,10 @@ code_SelectionStmt node = case node of
         modify (\attr -> attr{isSelection = True})
         code_RExpr rExpr
         modify (\attr -> attr{isSelection = False})
-        modify (\attr -> attr{code = (code attr) ++ "L" ++ (show labelTT)})
+        modify (\attr -> attr{code = (code attr) ++ "L" ++ (show labelTT) ++ "\n"})
         code_Stmt stmt1
-        modify (\attr -> attr{code = (code attr) ++ "goto " ++ next})
-        modify (\attr -> attr{code = (code attr) ++ "L" ++ (show labelFF)})
+        modify (\attr -> attr{code = (code attr) ++ "goto " ++ next ++ "\n"})
+        modify (\attr -> attr{code = (code attr) ++ "L" ++ (show labelFF) ++ "\n"})
         code_Stmt stmt2
         return ()
 
@@ -180,7 +177,7 @@ code_VarDeclInit :: VarDeclInit -> State Attributes ()
 code_VarDeclInit (VarDeclIn ident complexRExpr) = do
     (code_ComplexRExpr complexRExpr)
     expr_attr <- get
-    modify (\attr -> attr{code = (code attr) ++ (getIdent ident) ++ "=" ++ (addr expr_attr)})
+    modify (\attr -> attr{code = (code attr) ++ (getIdent ident) ++ "=" ++ (addr expr_attr) ++ "\n"})
 
 code_ComplexRExpr :: ComplexRExpr -> State Attributes ()
 code_ComplexRExpr node = case node of
@@ -198,7 +195,7 @@ code_RExpr node = case node of
         addr_RExpr1 <- gets addr
         (code_RExpr rExpr2)
         addr_RExpr2 <- gets addr
-        modify (\attr -> attr{code = (code attr) ++ "if " ++ addr_RExpr1 ++ op ++ addr_RExpr2 ++ "goto " ++ tt ++ "goto " ++ ff})
+        modify (\attr -> attr{code = (code attr) ++ "if " ++ addr_RExpr1 ++ op ++ addr_RExpr2 ++ "goto " ++ tt ++ "goto " ++ ff ++ "\n"})
         return ()
     OpAritm rExpr1 rExpr2 op -> do
         (code_RExpr rExpr1)
@@ -207,7 +204,7 @@ code_RExpr node = case node of
         addr_RExpr2 <- gets addr
         modify increaseCounterTemp
         modify (\attr -> attr{addr = "t" ++ (show $ counterTemp attr)})
-        modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "=" ++ addr_RExpr1 ++ op ++ addr_RExpr2})
+        modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "=" ++ addr_RExpr1 ++ op ++ addr_RExpr2 ++ "\n"})
         return ()
     OpBoolean rExpr1 rExpr2 op -> do
         isSel <- gets isSelection
@@ -220,7 +217,7 @@ code_RExpr node = case node of
                     label <- gets counterLab
                     modify (\attr -> attr{ttff = ("L" ++ (show label),ff)})
                     (code_RExpr rExpr1)
-                    modify (\attr -> attr{code = (code attr) ++ "L" ++ (show label)})
+                    modify (\attr -> attr{code = (code attr) ++ "L" ++ (show label) ++ "\n"})
                     modify (\attr -> attr{ttff = (tt,ff)})
                     (code_RExpr rExpr2)
                     return ()
@@ -230,7 +227,7 @@ code_RExpr node = case node of
                     label <- gets counterLab
                     modify (\attr -> attr{ttff = (tt,"L" ++ (show label))})
                     (code_RExpr rExpr1)
-                    modify (\attr -> attr{code = (code attr) ++ "L" ++ (show label)})
+                    modify (\attr -> attr{code = (code attr) ++ "L" ++ (show label) ++ "\n"})
                     modify (\attr -> attr{ttff = (tt,ff)})
                     (code_RExpr rExpr2)
                     return ()
@@ -242,7 +239,7 @@ code_RExpr node = case node of
                 addr_RExpr2 <- gets addr
                 modify increaseCounterTemp
                 modify (\attr -> attr{addr = "t" ++ (show $ counterTemp attr)})
-                modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "=" ++ addr_RExpr1 ++ op ++ addr_RExpr2})
+                modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "=" ++ addr_RExpr1 ++ op ++ addr_RExpr2 ++ "\n"})
                 return ()
     Not rExpr -> do
         (tt,ff) <- gets ttff
@@ -254,11 +251,12 @@ code_RExpr node = case node of
         addr_RExpr <- gets addr
         modify increaseCounterTemp
         modify (\attr -> attr{addr = "t" ++ (show $ counterTemp attr)})
-        modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "= negate" ++ addr_RExpr})
+        modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "= negate" ++ addr_RExpr ++ "\n"})
         return ()
     Ref lExpr -> do
         return ()
     FCall funCall -> do
+
         return ()
     Int integer -> do
         modify (\attr -> attr{addr = (show integer)})
@@ -280,7 +278,7 @@ code_RExpr node = case node of
                     then
                         do
                         (tt,_) <- gets ttff 
-                        modify (\attr -> attr{code = (code attr) ++ "goto " ++ tt})
+                        modify (\attr -> attr{code = (code attr) ++ "goto " ++ tt ++ "\n"})
                         return ()
                     else
                         do
@@ -292,7 +290,7 @@ code_RExpr node = case node of
                     then
                         do
                         (_,ff) <- gets ttff 
-                        modify (\attr -> attr{code = (code attr) ++ "goto " ++ ff})
+                        modify (\attr -> attr{code = (code attr) ++ "goto " ++ ff ++ "\n"})
                         return ()
                     else
                         do
@@ -303,7 +301,7 @@ code_RExpr node = case node of
         addr_LExpr <- gets addr
         modify increaseCounterTemp
         modify (\attr -> attr{addr = "t" ++ (show $ counterTemp attr)})
-        modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "=" ++ addr_LExpr})
+        modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "=" ++ addr_LExpr ++ "\n"})
         return ()
 
 code_LExpr :: LExpr -> State Attributes ()
@@ -315,14 +313,14 @@ code_LExpr node = case node of
         addr_LExpr <- gets addr
         modify increaseCounterTemp
         modify (\attr -> attr{addr = "t" ++ (show $ counterTemp attr)})
-        modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "=" ++ addr_LExpr ++ "+ 1" })
+        modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "=" ++ addr_LExpr ++ "+ 1" ++ "\n"})
         return ()
     PreDecr lExpr -> do
         code_LExpr lExpr
         addr_LExpr <- gets addr
         modify increaseCounterTemp
         modify (\attr -> attr{addr = "t" ++ (show $ counterTemp attr)})
-        modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "=" ++ addr_LExpr ++ "- 1" })
+        modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "=" ++ addr_LExpr ++ "- 1" ++ "\n"})
         return ()
     PostInc lExpr -> do
         return ()

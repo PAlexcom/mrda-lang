@@ -12,19 +12,23 @@ import Error
 
 compileFile fileName = putStrLn fileName >> readFile fileName >>= compile fileName
 compile fileName text = do
-    print ("Tokens")
-    print (tokens)
-    print ("Abstract Syntax Tree")
-    print (abstractSyntaxTree)
+    putStrLn ("Tokens")
+    print tokens
+    putStrLn ("Abstract Syntax Tree")
+    print abstractSyntaxTree
     case abstractSyntaxTree of
         Bad msg -> do
-            print (msg)
+            putStrLn (msg)
         Ok abst -> do
-            print ("Type Checking")
-            print (isTypeCheckOk)
-            tacGenerator abst
+            putStrLn ("Type Checking")
+            print isTypeCheckOk
+            putStrLn ("TAC")
+            print tacAttr
+            putStrLn ("TAC Source Code")
+            putStrLn (code tacAttr)
             where
                 isTypeCheckOk = typeChecking abst
+                tacAttr = tacGenerator abst
     where
         tokens = parseTokens text
         abstractSyntaxTree = pProgram tokens
