@@ -19,3 +19,4 @@ MRDALexer.hs
 MRDAParser.hs
 *.tac
 *.info
+.idea
