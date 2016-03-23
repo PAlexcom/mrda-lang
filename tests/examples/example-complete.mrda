@@ -1,21 +1,21 @@
 // Basic Declaration
-int c = 5 + 6;
-int x = 5 + 6, y = 5 * 4, z = 5 / 4;
+//int c = 5 + 6;
+//int x = 5 + 6, y = 5 * 4, z = 5 / 4;
 
 // Compound Declaration
 // char[4] s = ['a', 'b', 'c', 'd'];
 bool a = True;
 
-int proc(val int c, name bool b) {
-    return (c);
-}
+//int proc(val int c, name bool b) {
+//    return (c);
+//}
 
 // Function Declaration
 int func(val int a, res bool b, name char d, const float n, ref bool l) {
     // Basic Declaration
-    int counter = a;
-    int z = proc(counter, b);
-    counter = a;
+    //int counter = a;
+    //int z = proc(counter, b);
+    //counter = a;
 
     // Iteration Statement
     while (b == True) {
@@ -32,6 +32,7 @@ int func(val int a, res bool b, name char d, const float n, ref bool l) {
 
     // Left Expression Declaration
     ++counter;
+    --counter;
 
     // Jump Statement
     return (1+1);
