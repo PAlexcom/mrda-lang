@@ -251,23 +251,34 @@ check_Stmts [] = do
     return ()
 
 check_Stmt :: Stmt -> State Attributes ()
-check_Stmt node = case node of
-    Comp compStmt -> do
-        check_CompStmt compStmt
-        return ()
-    ProcCall funCall -> do
-        check_FunCall funCall
-        return ()
-    Jmp jumpStmt -> do
-        return ()
-    Iter iterStmt -> do
-        return ()
-    Sel selectionStmt -> do
-        return ()
-    Assgn lExpr assignment_op rExpr -> do
-        return ()
-    LExprStmt lExpr -> do
-        return ()
+check_Stmt node = do
+    env <- gets env
+    case node of
+        Comp compStmt -> do
+            check_CompStmt compStmt
+            return ()
+        ProcCall funCall -> do
+            check_FunCall funCall
+            return ()
+        Jmp jumpStmt -> do
+            return ()
+        Iter iterStmt -> do
+            return ()
+        Sel selectionStmt -> do
+            return ()
+        Assgn lExpr assignment_op rExpr -> do
+            return ()
+        LExprStmt lExpr -> do
+            case tplExpr of
+                Ok tp -> do
+                    return ()
+                Bad msg -> do
+                    setError msg
+                    return ()
+            return ()
+            where
+                tplExpr = check_LExpr lExpr env
+    return ()
 
 check_FunCall :: FunCall -> State Attributes ()
 check_FunCall (Call ident rExprs) = do
@@ -276,7 +287,7 @@ check_FunCall (Call ident rExprs) = do
         Ok tp -> do
             return ()
         Bad msg -> do
-            setError (msg)
+            setError msg
             return ()
     return ()
     where
@@ -347,11 +358,36 @@ check_RExpr node env = case node of
 
 check_LExpr :: LExpr -> Enviroment -> Err String
 check_LExpr node env = case node of
-    Deref rExpr -> checkTypesFakeSafe -- TODO
-    PreInc lExpr -> checkTypesFakeSafe -- TODO
-    PreDecr lExpr -> checkTypesFakeSafe -- TODO
-    PostInc lExpr -> checkTypesFakeSafe -- TODO
-    PostDecr lExpr -> checkTypesFakeSafe -- TODO
+    Deref rExpr -> case tpRExpr of
+        Ok tp -> if (tpRExpr == Ok "int" || tpRExpr == Ok "float")
+            then Ok tp
+            else Bad ("Deref expressions must be of type int or float, but: " ++ tp ++ " found")
+        Bad msg -> Bad msg
+        where tpRExpr = check_RExpr rExpr env
+    PreInc lExpr -> case tpLExpr of
+        Ok tp -> if (tpLExpr == Ok "int" || tpLExpr == Ok "float")
+            then Ok tp
+            else Bad ("PreInc expressions must be of type int or float, but: " ++ tp ++ " found")
+        Bad msg -> Bad msg
+        where tpLExpr = check_LExpr lExpr env
+    PreDecr lExpr -> case tpLExpr of
+        Ok tp -> if (tpLExpr == Ok "int" || tpLExpr == Ok "float")
+            then Ok tp
+            else Bad ("PreInc expressions must be of type int or float, but: " ++ tp ++ " found")
+        Bad msg -> Bad msg
+        where tpLExpr = check_LExpr lExpr env
+    PostInc lExpr -> case tpLExpr of
+        Ok tp -> if (tpLExpr == Ok "int" || tpLExpr == Ok "float")
+            then Ok tp
+            else Bad ("PosInc expressions must be of type int or float, but: " ++ tp ++ " found")
+        Bad msg -> Bad msg
+        where tpLExpr = check_LExpr lExpr env
+    PostDecr lExpr -> case tpLExpr of
+        Ok tp -> if (tpLExpr == Ok "int" || tpLExpr == Ok "float")
+            then Ok tp
+            else Bad ("PostDecr expressions must be of type int or float, but: " ++ tp ++ " found")
+        Bad msg -> Bad msg
+        where tpLExpr = check_LExpr lExpr env
     BasLExpr bLExpr -> check_BLExpr bLExpr env
 
 check_BLExpr :: BLExpr -> Enviroment -> Err String
