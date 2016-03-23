@@ -6,7 +6,7 @@ import System.Exit ( exitFailure, exitSuccess )
 
 import MRDALexer
 import MRDAParser
--- import MRDACodeGenerator
+import MRDACodeGenerator
 import MRDATypeChecker
 import Error
 
@@ -25,7 +25,7 @@ compile fileName text = do
             where
                 isTypeCheckOk = typeChecking abst
 
-    -- tacGenerator abstractSyntaxTree
+            tacGenerator abst
     where
         tokens = parseTokens text
         abstractSyntaxTree = pProgram tokens

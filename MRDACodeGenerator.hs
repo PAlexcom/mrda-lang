@@ -7,136 +7,311 @@ tacGenerator abstractSyntaxTree = do
     print $ "Generating Code in filename"
     print $ finalAttributes
     where
-        finalAttributes = execState (code_PROGRAM abstractSyntaxTree) defaultAttributes 
+        finalAttributes = execState (code_Program abstractSyntaxTree) defaultAttributes 
 
 data Attributes = Attributes {
     code :: String,
     env :: [Char],
-    counter :: Int,
-    addr :: String
+    counterTemp :: Int,
+    counterLab :: Int,
+    addr :: String,
+    ttff :: (String,String),
+    next :: String,
+    isSelection :: Bool
 } deriving (Show)
 
-defaultAttributes = Attributes "" [] 0 ""
+defaultAttributes = Attributes "" [] 0 0 "" ("","") "" False
 
-increaseCounter :: Attributes -> Attributes
-increaseCounter attr = attr {counter = (counter attr) + 1}
+------------------------------------------------------------
+------------------------ Utilities -------------------------
+------------------------------------------------------------
 
--- expr = EXP
--- blk = BLOCK
--- prg = PROGRAM
--- decl = DECLARATION
--- str = String
--- int = Int
--- tps = Types
--- attr = Attributes
-code_PROGRAM :: PROGRAM -> State Attributes ()
-code_PROGRAM node = case node of
-    Program blk prg -> do
-            blk_attr <- (code_BLOCK blk)
-            prg_attr <- (code_PROGRAM prg)
+increaseCounterTemp :: Attributes -> Attributes
+increaseCounterTemp attr = attr {counterTemp = (counterTemp attr) + 1}
+
+increaseCounterLab :: Attributes -> Attributes
+increaseCounterLab attr = attr {counterLab = (counterLab attr) + 1}
+
+getIdent :: Ident -> String
+getIdent (Ident ident) = ident
+
+------------------------------------------------------------
+---------------------- Code Generator ----------------------
+------------------------------------------------------------
+
+code_Program :: Program -> State Attributes ()
+code_Program (Prog decls) = do
+    modify increaseCounterLab
+    label <- gets counterLab
+    code_Decls decls
+    modify (\attr -> attr{code = (code attr) ++ "L" ++ (show label) ++ ":halt"})
+    return ()
+
+code_Decls :: [Decl] -> State Attributes ()
+code_Decls (x:xs) = do
+    code_Decl x
+    code_Decls xs
+    return ()
+
+code_Decls [] = do
+    return ()
+
+code_Decl :: Decl -> State Attributes ()
+code_Decl node = case node of
+    DvarBInit _ varDeclInits -> do
+        code_VarDeclInits varDeclInits
+        return ()
+    DvarCInit _ varDeclInits -> do
+        code_VarDeclInits varDeclInits
+        return ()
+    Dfun _ ident parameters compStmt -> do
+        -- TODO creare un nuovo ambiente
+        --pushToEnv $ FuncElem (getIdent ident) (getBasicType basicType) (serializeEnvParameters parameters)
+        --check_CompStmt compStmt
+        return ()
+
+code_CompStmt :: CompStmt -> State Attributes ()
+code_CompStmt (BlockDecl decls stmts) = do
+    code_Decls decls
+    next <- gets next
+    code_Stmts stmts next
+    modify (\attr -> attr{next = next})
+    return ()
+
+code_Stmts :: [Stmt] -> String -> State Attributes ()
+code_Stmts [x] next = do
+    modify (\attr -> attr{next = next})
+    code_Stmt x
+    return ()
+
+code_Stmts (x:xs) next = do
+    modify increaseCounterLab
+    label <- gets counterLab
+    modify (\attr -> attr{next = ("L" ++ (show label))})
+    code_Stmt x
+    modify (\attr -> attr{code = (code attr) ++ "L" ++ (show label)})
+    code_Stmts xs next
+    return ()
+
+code_Stmts [] _ = do
+    return ()
+
+code_Stmt :: Stmt -> State Attributes ()
+code_Stmt node = case node of
+    Comp compStmt -> do
+        code_CompStmt compStmt
+        return ()
+    ProcCall funCall -> do
+        return ()
+    Jmp jumpStmt -> do
+        return ()
+    Iter iterStmt -> do
+        code_IterStmt iterStmt
+        return ()
+    Sel selectionStmt -> do
+        code_SelectionStmt selectionStmt
+        return ()
+    Assgn lExpr assignment_op rExpr -> do
+        return ()
+    LExprStmt lExpr -> do
+        return ()
+
+code_IterStmt :: IterStmt -> State Attributes ()
+code_IterStmt node = case node of
+    While rExpr stmt -> do
+        next <- gets next
+        modify increaseCounterLab
+        begin <- gets counterLab
+        modify increaseCounterLab
+        labelTT <- gets counterLab
+        modify (\attr -> attr{ttff = ("L" ++ (show labelTT), next)})
+        modify (\attr -> attr{code = (code attr) ++ "L" ++ (show begin)})
+        code_RExpr rExpr
+        modify (\attr -> attr{code = (code attr) ++ "L" ++ (show labelTT)})
+        modify (\attr -> attr{next = ("L" ++ (show begin))})
+        code_Stmt stmt
+        modify (\attr -> attr{code = (code attr) ++ "goto L" ++ (show labelTT)})
+        return ()
+    DoWhile stmt rExpr -> do
+        return ()
+
+code_SelectionStmt :: SelectionStmt -> State Attributes ()
+code_SelectionStmt node = case node of
+    IfNoElse rExpr stmt -> do
+        next <- gets next
+        modify increaseCounterLab
+        label <- gets counterLab
+        modify (\attr -> attr{ttff = ("L" ++ (show label), next)})
+        code_RExpr rExpr
+        modify (\attr -> attr{code = (code attr) ++ "L" ++ (show label)})
+        code_Stmt stmt
+        return ()
+    IfElse rExpr stmt1 stmt2 -> do
+        next <- gets next
+        modify increaseCounterLab
+        labelTT <- gets counterLab
+        modify increaseCounterLab
+        labelFF <- gets counterLab
+        modify (\attr -> attr{ttff = ("L" ++ (show labelTT), "L" ++ (show labelFF))})
+        code_RExpr rExpr
+        modify (\attr -> attr{code = (code attr) ++ "L" ++ (show labelTT)})
+        code_Stmt stmt1
+        modify (\attr -> attr{code = (code attr) ++ "goto " ++ next})
+        modify (\attr -> attr{code = (code attr) ++ "L" ++ (show labelFF)})
+        code_Stmt stmt2
+        return ()
+
+code_VarDeclInits :: [VarDeclInit] -> State Attributes ()
+code_VarDeclInits [] = do
+    return ()
+
+code_VarDeclInits (x:xs) = do
+    code_VarDeclInit x
+    code_VarDeclInits xs
+    return ()
+
+code_VarDeclInit :: VarDeclInit -> State Attributes ()
+code_VarDeclInit (VarDeclIn ident complexRExpr) = do
+    (code_ComplexRExpr complexRExpr)
+    expr_attr <- get
+    modify (\attr -> attr{code = (code attr) ++ (getIdent ident) ++ "=" ++ (addr expr_attr)})
+
+code_ComplexRExpr :: ComplexRExpr -> State Attributes ()
+code_ComplexRExpr node = case node of
+    Simple rExpr -> do
+                code_RExpr rExpr
+                return ()
+    Array complexRExpr -> do
+                return ()
+
+code_RExpr :: RExpr -> State Attributes ()
+code_RExpr node = case node of
+    OpRelation rExpr1 rExpr2 op -> do
+        (tt,ff) <- gets ttff
+        (code_RExpr rExpr1)
+        addr_RExpr1 <- gets addr
+        (code_RExpr rExpr2)
+        addr_RExpr2 <- gets addr
+        modify (\attr -> attr{code = (code attr) ++ "if " ++ addr_RExpr1 ++ op ++ addr_RExpr2 ++ "goto " ++ tt ++ "goto " ++ ff})
+        return ()
+    OpAritm rExpr1 rExpr2 op -> do
+        (code_RExpr rExpr1)
+        addr_RExpr1 <- gets addr
+        (code_RExpr rExpr2)
+        addr_RExpr2 <- gets addr
+        modify increaseCounterTemp
+        modify (\attr -> attr{addr = "t" ++ (show $ counterTemp attr)})
+        modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "=" ++ addr_RExpr1 ++ op ++ addr_RExpr2})
+        return ()
+    OpBoolean rExpr1 rExpr2 op -> case op of 
+        "&&" -> do
+            (tt,ff) <- gets ttff
+            modify increaseCounterLab
+            label <- gets counterLab
+            modify (\attr -> attr{ttff = ("L" ++ (show label),ff)})
+            (code_RExpr rExpr1)
+            modify (\attr -> attr{code = (code attr) ++ "L" ++ (show label)})
+            modify (\attr -> attr{ttff = (tt,ff)})
+            (code_RExpr rExpr2)
             return ()
-    ProgramEmpty -> do
-        return ()
-
-code_BLOCK :: BLOCK -> State Attributes ()
-code_BLOCK node = case node of
-    BlockDecl decl -> do
-            decl_attr <- (code_DECLARATION decl)
+        "||" -> do
+            (tt,ff) <- gets ttff
+            modify increaseCounterLab
+            label <- gets counterLab
+            modify (\attr -> attr{ttff = (tt,"L" ++ (show label))})
+            (code_RExpr rExpr1)
+            modify (\attr -> attr{code = (code attr) ++ "L" ++ (show label)})
+            modify (\attr -> attr{ttff = (tt,ff)})
+            (code_RExpr rExpr2)
             return ()
-    BlockIf blkif -> do
-            blkif_attr <- (code_BLOCKIF blkif)
-            return ()
-
-code_BLOCKIF :: BLOCKIF -> State Attributes ()
-code_BLOCKIF node = case node of
-    StatementIfElse expr blk1 blk2 -> do
-            expr_attr <- (code_EXP expr)
-            blk1_attr <- (code_BLOCK blk1)
-            blk2_attr <- (code_BLOCK blk2)
-            return ()
-    StatementIf expr blk -> do
-            expr_attr <- (code_EXP expr)
-            blk_attr <- (code_BLOCK blk)
-            return ()
-
-code_DECLARATION :: DECLARATION -> State Attributes ()
-code_DECLARATION node = case node of
-    DeclarationExp tps str expr -> do
-        (code_EXP expr)
-        expr_attr <- get
-        modify increaseCounter
-        modify (\attr -> attr{code = (code attr) ++ str ++ "=" ++ (addr expr_attr)})
+    Not rExpr -> do
+        (tt,ff) <- gets ttff
+        modify (\attr -> attr{ttff = (ff,tt)})
+        code_RExpr rExpr
+        return ()
+    Neg rExpr -> do
+        (code_RExpr rExpr)
+        addr_RExpr <- gets addr
+        modify increaseCounterTemp
+        modify (\attr -> attr{addr = "t" ++ (show $ counterTemp attr)})
+        modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "= negate" ++ addr_RExpr})
+        return ()
+    Ref lExpr -> do
+        return ()
+    FCall funCall -> do
+        return ()
+    Int integer -> do
+        modify (\attr -> attr{addr = (show integer)})
+        return ()
+    Char char -> do
+        modify (\attr -> attr{addr = (char:[])})
+        return ()
+    String string -> do
+        modify (\attr -> attr{addr = string})
+        return ()
+    Float float -> do
+        modify (\attr -> attr{addr = (show float)})
+        return ()
+    Bool boolean -> 
+        case boolean of
+            Boolean_True -> do
+                isSelection <- gets isSelection
+                if isSelection
+                    then
+                        do
+                        (tt,_) <- gets ttff 
+                        modify (\attr -> attr{code = (code attr) ++ "goto " ++ tt})
+                        return ()
+                    else
+                        do
+                        modify (\attr -> attr{addr = "True"})
+                        return ()
+            Boolean_False -> do
+                isSelection <- gets isSelection
+                if isSelection
+                    then
+                        do
+                        (_,ff) <- gets ttff 
+                        modify (\attr -> attr{code = (code attr) ++ "goto " ++ ff})
+                        return ()
+                    else
+                        do
+                        modify (\attr -> attr{addr = "True"})
+                        return ()
+    Lexpr lExpr -> do
+        code_LExpr lExpr
+        addr_LExpr <- gets addr
+        modify increaseCounterTemp
+        modify (\attr -> attr{addr = "t" ++ (show $ counterTemp attr)})
+        modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "=" ++ addr_LExpr})
         return ()
 
-code_EXP :: EXP -> State Attributes ()
-code_EXP node = case node of
-    GrtOp expr1 expr2 -> do
+code_LExpr :: LExpr -> State Attributes ()
+code_LExpr node = case node of
+    Deref rExpr -> do
         return ()
-    BoolGreaterOp expr1 expr2 -> do
+    PreInc lExpr -> do
+        code_LExpr lExpr
+        addr_LExpr <- gets addr
+        modify increaseCounterTemp
+        modify (\attr -> attr{addr = "t" ++ (show $ counterTemp attr)})
+        modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "=" ++ addr_LExpr ++ "+ 1" })
         return ()
-    BoolLessOP expr1 expr2 -> do
+    PreDecr lExpr -> do
+        code_LExpr lExpr
+        addr_LExpr <- gets addr
+        modify increaseCounterTemp
+        modify (\attr -> attr{addr = "t" ++ (show $ counterTemp attr)})
+        modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "=" ++ addr_LExpr ++ "- 1" })
         return ()
-    BoolEqualOp expr1 expr2 -> do
-        return ()
-    BoolNEqOP expr1 expr2 -> do
-        return ()
-    BoolGEqOP expr1 expr2 -> do
-        return ()
-    BoolLEqOP expr1 expr2 -> do
-        return ()
-    PlusOP expr1 expr2 -> do
-        (code_EXP expr1)
-        expr1_attr <- get
-        (code_EXP expr2)
-        expr2_attr <- get
-        modify increaseCounter
-        modify (\attr -> attr{addr = "t" ++ (show $ counter attr)})
-        modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "=" ++ (addr expr1_attr) ++ "+" ++ (addr expr2_attr)})
-        return ()
-    TimesOP expr1 expr2 -> do
-        (code_EXP expr1)
-        expr1_attr <- get
-        (code_EXP expr2)
-        expr2_attr <- get
-        modify increaseCounter
-        modify (\attr -> attr{addr = "t" ++ (show $ counter attr)})
-        modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "=" ++ (addr expr1_attr) ++ "*" ++ (addr expr2_attr)})
-        return ()
-    Int int -> do
-        modify (\attr -> attr{addr = (show int)})
-        return ()
-    MinusOP expr1 expr2 -> do
-        (code_EXP expr1)
-        expr1_attr <- get
-        (code_EXP expr2)
-        expr2_attr <- get
-        modify increaseCounter
-        modify (\attr -> attr{addr = "t" ++ (show $ counter attr)})
-        modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "=" ++ (addr expr1_attr) ++ "-" ++ (addr expr2_attr)})
-        return ()
-    Bracket expr -> do
-        expr_attr <- (code_EXP expr)
-        return ()
-    NegateOP expr -> do
-        return ()
-    DivideOP expr1 expr2 -> do
-        (code_EXP expr1)
-        expr1_attr <- get
-        (code_EXP expr2)
-        expr2_attr <- get
-        modify increaseCounter
-        modify (\attr -> attr{addr = "t" ++ (show $ counter attr)})
-        modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "=" ++ (addr expr1_attr) ++ "/" ++ (addr expr2_attr)})
-        return ()
-    TrueVal -> do
-        return ()
-    FalseVal -> do
-        return ()
-    Var str -> do
-        modify (\attr -> attr{addr = str})
-        return ()
-
-
-
+    PostInc lExpr -> do
         
+        return ()
+    PostDecr lExpr -> do
+        return ()
+    BasLExpr bLExpr -> do
+        return () 
+
+
+
 
