@@ -64,6 +64,15 @@ pushToEnv envElem = case envElem of
         modify (\attr -> attr {env = currentEnv {vars = envElem : (vars currentEnv)}})
         return ()
 
+pushToEnvFuncParams :: [Parameter] -> State Attributes ()
+pushToEnvFuncParams [] = do
+    return ()
+pushToEnvFuncParams ((Param _ tp ident):params) = do
+    -- TODO controllare che non ci sono duplicati o clash di nomi
+    -- TODO quando vengono gestiti gli array creare la struttura dati ArrayElem
+    pushToEnv $ VarElem (getIdent ident) (getTypeSpec tp)
+    return ()
+
 serializeEnvParameters :: [Parameter] -> [String]
 serializeEnvParameters [] = []
 serializeEnvParameters ((Param _ tp ident):params)
@@ -124,6 +133,29 @@ checkAritmTypes first second = case check of
 
 checkRelTypes :: Err String -> Err String -> Err String
 checkRelTypes first second = checkAritmTypes first second
+
+checkIdentType :: String -> Enviroment -> Err String
+checkIdentType name env = case (isIdentInEnv name env) of
+    Just tp -> Ok tp
+    Nothing -> Bad ("Variable name: " ++ name ++ " is not declared in the scope")
+
+isIdentInEnv :: String -> Enviroment -> Maybe String
+isIdentInEnv name env = case match of
+    Just params -> Just params
+    Nothing -> case parentEnv of
+        Just parent -> isIdentInEnv name parent
+        Nothing -> Nothing
+    where
+        parentEnv = parent env
+        varsEnv = vars env
+        match = isIdentInVars name varsEnv
+
+isIdentInVars :: String -> [EnviromentElement] -> Maybe String
+isIdentInVars name [] = Nothing
+
+isIdentInVars name ((VarElem ident tp):vars) = if name == ident
+    then Just tp
+    else isIdentInVars name vars
 
 checkTypesFakeSafe :: Err String
 checkTypesFakeSafe = Ok "null"
@@ -186,6 +218,7 @@ check_Decl node = case node of
     Dfun basicType ident parameters compStmt -> do
         -- TODO creare un nuovo ambiente
         pushToEnv $ FuncElem (getIdent ident) (getBasicType basicType) (serializeEnvParameters parameters)
+        pushToEnvFuncParams parameters
         check_CompStmt compStmt
         return ()
 
@@ -228,7 +261,7 @@ check_FunCall (Call ident rExprs) = do
     env <- gets env
     case (isFuncInEnv funcName env) of
         Just params -> do
-            case (check_RExprs rExprs params) of
+            case (check_RExprs rExprs params env) of
                 Ok tp -> do
                     return ()
                 Bad msg -> do
@@ -242,11 +275,11 @@ check_FunCall (Call ident rExprs) = do
     where
         funcName = getIdent ident
 
-check_RExprs :: [RExpr] -> [String] -> Err String
-check_RExprs [] [] = Ok ""
-check_RExprs (x:xs) [] = Bad "different function arguments number"
-check_RExprs [] (x:xs) = Bad "different function arguments number"
-check_RExprs (rExpr:rExprs) (param:params) = case (check_RExpr rExpr) of
+check_RExprs :: [RExpr] -> [String] -> Enviroment -> Err String
+check_RExprs [] [] _ = Ok ""
+check_RExprs (x:xs) [] env = Bad "different function arguments number"
+check_RExprs [] (x:xs) env = Bad "different function arguments number"
+check_RExprs (rExpr:rExprs) (param:params) env = case (check_RExpr rExpr env) of
     Ok tp -> if tp == param
         then Ok ""
         else Bad "argument types are not equal"
@@ -262,36 +295,40 @@ check_VarDeclInits tp (x:xs) = do
     return ()
 
 check_VarDeclInit :: Err String -> VarDeclInit -> State Attributes ()
-check_VarDeclInit tp node = case node of
-    VarDeclIn ident complexRExpr -> do
-        case (checkTypes tp tpRexpr) of
-            Bad msg -> setError msg
-            Ok tp1 -> pushToEnv (VarElem (getIdent ident) tp1)
-        return ()
-        where
-            tpRexpr = check_ComplexRExpr complexRExpr
+check_VarDeclInit tp node = do 
+    env <- gets env
+    case node of
+        VarDeclIn ident complexRExpr -> do
+            case (checkTypes tp tpRexpr) of
+                Bad msg -> setError msg
+                Ok tp1 -> pushToEnv (VarElem (getIdent ident) tp1)
+            return ()
+            where
+            tpRexpr = check_ComplexRExpr complexRExpr env
+    return ()
 
-check_ComplexRExpr :: ComplexRExpr -> Err String
-check_ComplexRExpr node = case node of
-    Simple rExpr -> check_RExpr rExpr
+
+check_ComplexRExpr :: ComplexRExpr -> Enviroment -> Err String
+check_ComplexRExpr node env = case node of
+    Simple rExpr -> check_RExpr rExpr env
     Array complexRExpr -> checkTypesFakeSafe
 
-check_RExpr :: RExpr -> Err String
-check_RExpr node = case node of
+check_RExpr :: RExpr -> Enviroment -> Err String
+check_RExpr node env = case node of
     OpRelation rExpr1 rExpr2 _ -> checkRelTypes tp1 tp2
         where
-            tp1 = check_RExpr rExpr1
-            tp2 = check_RExpr rExpr2
+            tp1 = check_RExpr rExpr1 env
+            tp2 = check_RExpr rExpr2 env
     OpAritm rExpr1 rExpr2 _ -> checkAritmTypes tp1 tp2
         where
-            tp1 = check_RExpr rExpr1
-            tp2 = check_RExpr rExpr2
+            tp1 = check_RExpr rExpr1 env
+            tp2 = check_RExpr rExpr2 env
     OpBoolean rExpr1 rExpr2 _ -> checkBoolTypes tp1 tp2
         where
-            tp1 = check_RExpr rExpr1
-            tp2 = check_RExpr rExpr2
-    Not rExpr -> check_RExpr rExpr
-    Neg rExpr -> check_RExpr rExpr
+            tp1 = check_RExpr rExpr1 env
+            tp2 = check_RExpr rExpr2 env
+    Not rExpr -> check_RExpr rExpr env
+    Neg rExpr -> check_RExpr rExpr env
     Ref lExpr -> checkTypesFakeSafe  -- FIXME in case of any type, fixit later
     FCall funCall -> checkTypesFakeSafe -- TODO
     Int integer -> Ok "int"
@@ -299,5 +336,19 @@ check_RExpr node = case node of
     String string -> Ok "string"
     Float double -> Ok "float"
     Bool boolean -> Ok "bool"
-    Lexpr lExpr -> checkTypesFakeSafe -- TODO
+    Lexpr lExpr -> check_LExpr lExpr env
+
+check_LExpr :: LExpr -> Enviroment -> Err String
+check_LExpr node env = case node of
+    Deref rExpr -> checkTypesFakeSafe -- TODO
+    PreInc lExpr -> checkTypesFakeSafe -- TODO
+    PreDecr lExpr -> checkTypesFakeSafe -- TODO
+    PostInc lExpr -> checkTypesFakeSafe -- TODO
+    PostDecr lExpr -> checkTypesFakeSafe -- TODO
+    BasLExpr bLExpr -> check_BLExpr bLExpr env
+
+check_BLExpr :: BLExpr -> Enviroment -> Err String
+check_BLExpr node env = case node of
+    ArrayEl bLExpr rExpr -> checkTypesFakeSafe -- TODO
+    Id ident -> checkIdentType (getIdent ident) env
 
