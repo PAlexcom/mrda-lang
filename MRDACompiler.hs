@@ -22,10 +22,9 @@ compile fileName text = do
         Ok abst -> do
             print ("Type Checking")
             print (isTypeCheckOk)
+            tacGenerator abst
             where
                 isTypeCheckOk = typeChecking abst
-
-            tacGenerator abst
     where
         tokens = parseTokens text
         abstractSyntaxTree = pProgram tokens

@@ -126,7 +126,9 @@ code_IterStmt node = case node of
         labelTT <- gets counterLab
         modify (\attr -> attr{ttff = ("L" ++ (show labelTT), next)})
         modify (\attr -> attr{code = (code attr) ++ "L" ++ (show begin)})
+        modify (\attr -> attr{isSelection = True})
         code_RExpr rExpr
+        modify (\attr -> attr{isSelection = False})
         modify (\attr -> attr{code = (code attr) ++ "L" ++ (show labelTT)})
         modify (\attr -> attr{next = ("L" ++ (show begin))})
         code_Stmt stmt
@@ -142,7 +144,9 @@ code_SelectionStmt node = case node of
         modify increaseCounterLab
         label <- gets counterLab
         modify (\attr -> attr{ttff = ("L" ++ (show label), next)})
+        modify (\attr -> attr{isSelection = True})
         code_RExpr rExpr
+        modify (\attr -> attr{isSelection = False})
         modify (\attr -> attr{code = (code attr) ++ "L" ++ (show label)})
         code_Stmt stmt
         return ()
@@ -153,7 +157,9 @@ code_SelectionStmt node = case node of
         modify increaseCounterLab
         labelFF <- gets counterLab
         modify (\attr -> attr{ttff = ("L" ++ (show labelTT), "L" ++ (show labelFF))})
+        modify (\attr -> attr{isSelection = True})
         code_RExpr rExpr
+        modify (\attr -> attr{isSelection = False})
         modify (\attr -> attr{code = (code attr) ++ "L" ++ (show labelTT)})
         code_Stmt stmt1
         modify (\attr -> attr{code = (code attr) ++ "goto " ++ next})
@@ -203,27 +209,41 @@ code_RExpr node = case node of
         modify (\attr -> attr{addr = "t" ++ (show $ counterTemp attr)})
         modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "=" ++ addr_RExpr1 ++ op ++ addr_RExpr2})
         return ()
-    OpBoolean rExpr1 rExpr2 op -> case op of 
-        "&&" -> do
-            (tt,ff) <- gets ttff
-            modify increaseCounterLab
-            label <- gets counterLab
-            modify (\attr -> attr{ttff = ("L" ++ (show label),ff)})
-            (code_RExpr rExpr1)
-            modify (\attr -> attr{code = (code attr) ++ "L" ++ (show label)})
-            modify (\attr -> attr{ttff = (tt,ff)})
-            (code_RExpr rExpr2)
-            return ()
-        "||" -> do
-            (tt,ff) <- gets ttff
-            modify increaseCounterLab
-            label <- gets counterLab
-            modify (\attr -> attr{ttff = (tt,"L" ++ (show label))})
-            (code_RExpr rExpr1)
-            modify (\attr -> attr{code = (code attr) ++ "L" ++ (show label)})
-            modify (\attr -> attr{ttff = (tt,ff)})
-            (code_RExpr rExpr2)
-            return ()
+    OpBoolean rExpr1 rExpr2 op -> do
+        isSel <- gets isSelection
+        if isSel
+            then 
+                case op of 
+                "&&" -> do
+                    (tt,ff) <- gets ttff
+                    modify increaseCounterLab
+                    label <- gets counterLab
+                    modify (\attr -> attr{ttff = ("L" ++ (show label),ff)})
+                    (code_RExpr rExpr1)
+                    modify (\attr -> attr{code = (code attr) ++ "L" ++ (show label)})
+                    modify (\attr -> attr{ttff = (tt,ff)})
+                    (code_RExpr rExpr2)
+                    return ()
+                "||" -> do
+                    (tt,ff) <- gets ttff
+                    modify increaseCounterLab
+                    label <- gets counterLab
+                    modify (\attr -> attr{ttff = (tt,"L" ++ (show label))})
+                    (code_RExpr rExpr1)
+                    modify (\attr -> attr{code = (code attr) ++ "L" ++ (show label)})
+                    modify (\attr -> attr{ttff = (tt,ff)})
+                    (code_RExpr rExpr2)
+                    return ()
+            else    
+                do
+                (code_RExpr rExpr1)
+                addr_RExpr1 <- gets addr
+                (code_RExpr rExpr2)
+                addr_RExpr2 <- gets addr
+                modify increaseCounterTemp
+                modify (\attr -> attr{addr = "t" ++ (show $ counterTemp attr)})
+                modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "=" ++ addr_RExpr1 ++ op ++ addr_RExpr2})
+                return ()
     Not rExpr -> do
         (tt,ff) <- gets ttff
         modify (\attr -> attr{ttff = (ff,tt)})
@@ -276,7 +296,7 @@ code_RExpr node = case node of
                         return ()
                     else
                         do
-                        modify (\attr -> attr{addr = "True"})
+                        modify (\attr -> attr{addr = "False"})
                         return ()
     Lexpr lExpr -> do
         code_LExpr lExpr
@@ -305,12 +325,21 @@ code_LExpr node = case node of
         modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "=" ++ addr_LExpr ++ "- 1" })
         return ()
     PostInc lExpr -> do
-        
         return ()
     PostDecr lExpr -> do
         return ()
     BasLExpr bLExpr -> do
+        code_BLExpr bLExpr
         return () 
+
+code_BLExpr :: BLExpr -> State Attributes ()
+code_BLExpr bLExpr = case bLExpr of
+    ArrayEl bLExpr rExpr -> do 
+        -- TODO gestire caso array
+        return ()
+    Id ident -> do
+        modify (\attr -> attr{addr = (getIdent ident)})
+        return ()
 
 
 
