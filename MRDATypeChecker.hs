@@ -163,9 +163,13 @@ checkTypesFakeSafe = Ok "null"
 checkTypesFake :: String
 checkTypesFake = "null"
 
-isFuncInEnv :: String -> Enviroment -> Maybe [String]
+getFunctionType :: FunCall -> Enviroment -> Err String
+getFunctionType (Call ident rExprs) env = isFunCallGood (getIdent ident) rExprs env
+
+
+isFuncInEnv :: String -> Enviroment -> Maybe (String, [String])
 isFuncInEnv funcName env = case match of
-    Just params -> Just params
+    Just (tp,params) -> Just (tp,params)
     Nothing -> case parentEnv of
         Just parent -> isFuncInEnv funcName parent
         Nothing -> Nothing
@@ -174,12 +178,21 @@ isFuncInEnv funcName env = case match of
         funcsEnv = funcs env
         match = isFuncInFuncs funcName funcsEnv
 
-isFuncInFuncs :: String -> [EnviromentElement] -> Maybe [String]
+isFuncInFuncs :: String -> [EnviromentElement] -> Maybe (String,[String])
 isFuncInFuncs funcName [] = Nothing
 
 isFuncInFuncs funcName ((FuncElem ident tp params):funcs) = if funcName == ident
-    then Just params
+    then Just (tp, params)
     else isFuncInFuncs funcName funcs
+
+isFunCallGood :: String -> [RExpr] -> Enviroment -> Err String
+isFunCallGood funcName rExprs env = 
+    case (isFuncInEnv funcName env) of
+        Just (tp, params) ->
+            case (check_RExprs rExprs params env) of
+                Ok _ -> Ok tp
+                Bad msg -> Bad ("Error in procedure call: " ++ funcName ++ " error: " ++ msg)
+        Nothing -> Bad ("Function: " ++ funcName ++ " is not declared in the scope")
 
 ------------------------------------------------------------
 --------- Parser ABS ---------------------------------------
@@ -259,17 +272,11 @@ check_Stmt node = case node of
 check_FunCall :: FunCall -> State Attributes ()
 check_FunCall (Call ident rExprs) = do
     env <- gets env
-    case (isFuncInEnv funcName env) of
-        Just params -> do
-            case (check_RExprs rExprs params env) of
-                Ok tp -> do
-                    return ()
-                Bad msg -> do
-                    setError ("Error in procedure call: " ++ funcName ++ " error: " ++ msg)
-                    return ()
+    case (isFunCallGood funcName rExprs env) of
+        Ok tp -> do
             return ()
-        Nothing -> do
-            setError ("Function: " ++ funcName ++ " is not declared in the scope")
+        Bad msg -> do
+            setError (msg)
             return ()
     return ()
     where
@@ -330,7 +337,7 @@ check_RExpr node env = case node of
     Not rExpr -> check_RExpr rExpr env
     Neg rExpr -> check_RExpr rExpr env
     Ref lExpr -> checkTypesFakeSafe  -- FIXME in case of any type, fixit later
-    FCall funCall -> checkTypesFakeSafe -- TODO
+    FCall funCall -> getFunctionType funCall env
     Int integer -> Ok "int"
     Char char -> Ok "char"
     String string -> Ok "string"
@@ -351,4 +358,3 @@ check_BLExpr :: BLExpr -> Enviroment -> Err String
 check_BLExpr node env = case node of
     ArrayEl bLExpr rExpr -> checkTypesFakeSafe -- TODO
     Id ident -> checkIdentType (getIdent ident) env
-
