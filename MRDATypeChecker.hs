@@ -4,6 +4,11 @@ import MRDAParser
 import Control.Monad.State
 import Error
 
+-----
+----- * Gestire il case di 'if' e 'while'
+----- * Controllare che il tipo di ritorno di una funzione sia uguale a quello dichiarato all'inizio della definizione
+-----
+
 data Attributes = Attributes {
     isError :: Err String,
     env :: Enviroment,
