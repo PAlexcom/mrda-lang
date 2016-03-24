@@ -6,7 +6,6 @@ import Error
 
 -----
 ----- * Gestire il case di 'if' e 'while'
------ * Controllare che il tipo di ritorno di una funzione sia uguale a quello dichiarato all'inizio della definizione
 -----
 
 data Attributes = Attributes {
@@ -73,7 +72,6 @@ pushToEnvFuncParams :: [Parameter] -> State Attributes ()
 pushToEnvFuncParams [] = do
     return ()
 pushToEnvFuncParams ((Param _ tp ident):params) = do
-    -- TODO controllare che non ci sono duplicati o clash di nomi
     -- TODO quando vengono gestiti gli array creare la struttura dati ArrayElem
     pushToEnv $ VarElem (getIdent ident) (getTypeSpec tp)
     return ()
@@ -215,7 +213,13 @@ check_Prog (Prog decls) = do
 check_Decls :: [Decl] -> State Attributes ()
 check_Decls (x:xs) = do
     check_Decl x
-    check_Decls xs
+    isError <- gets isError
+    case isError of
+        Ok _ -> do
+            check_Decls xs
+            return()
+        Bad _ -> do
+            return()
     return ()
 
 check_Decls [] = do
@@ -234,11 +238,27 @@ check_Decl node = case node of
         where
             tp = getTypeSpecSafe typeSpec
     Dfun basicType ident parameters compStmt returnStmt -> do
-        -- TODO creare un nuovo ambiente
         pushToEnv $ FuncElem (getIdent ident) (getBasicType basicType) (serializeEnvParameters parameters)
         pushToEnvFuncParams parameters
         check_CompStmt compStmt
-        return ()
+        env <- gets env
+        case (check_ReturnStmt returnStmt env) of 
+            Ok tp -> do
+                case (checkTypes (getBasicTypeSafe basicType) (Ok tp)) of
+                    Ok _ -> do
+                        return()
+                    Bad msg -> do
+                        setError $ "In function: " ++ (getIdent ident) ++ " declared type and returned type are not equal"
+                        return()
+            Bad msg -> do
+                setError msg
+                return()
+        return()
+
+check_ReturnStmt :: ReturnStmt -> Enviroment -> Err String
+check_ReturnStmt node env = case node of
+    RetExpVoid -> Ok "void"
+    RetExp rExpr -> check_RExpr rExpr env
 
 check_CompStmt :: CompStmt -> State Attributes ()
 check_CompStmt (BlockDecl decls stmts) = do
@@ -249,7 +269,13 @@ check_CompStmt (BlockDecl decls stmts) = do
 check_Stmts :: [Stmt] -> State Attributes ()
 check_Stmts (x:xs) = do
     check_Stmt x
-    check_Stmts xs
+    isError <- gets isError
+    case isError of
+        Ok _ -> do
+            check_Stmts xs
+            return()
+        Bad _ -> do
+            return()
     return ()
 
 check_Stmts [] = do
