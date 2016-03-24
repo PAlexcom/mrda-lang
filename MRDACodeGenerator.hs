@@ -111,7 +111,7 @@ code_Stmt node = case node of
         code_CompStmt compStmt
         return ()
     ProcCall funCall -> do
-        code_FunCall funCall
+        code_ProcCall funCall
         return ()
     Jmp jumpStmt -> do
         return ()
@@ -129,6 +129,14 @@ code_Stmt node = case node of
 
 code_FunCall :: FunCall -> State Attributes ()
 code_FunCall (Call ident rExprs) = do
+        code_CallParams rExprs []
+        modify increaseCounterTemp
+        modify (\attr -> attr{addr = "t" ++ (show $ counterTemp attr)})
+        modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "= " ++ "Call " ++ (getIdent ident) ++ " " ++ (show $ length rExprs) ++ "\n"})
+        return () 
+
+code_ProcCall :: FunCall -> State Attributes ()
+code_ProcCall (Call ident rExprs) = do
         code_CallParams rExprs []
         modify (\attr -> attr{code = (code attr) ++ "Call " ++ (getIdent ident) ++ " " ++ (show $ length rExprs) ++ "\n"})
         return () 
@@ -299,7 +307,7 @@ code_RExpr node = case node of
     Ref lExpr -> do
         return ()
     FCall funCall -> do
-
+        code_FunCall funCall
         return ()
     Int integer -> do
         modify (\attr -> attr{addr = (show integer)})

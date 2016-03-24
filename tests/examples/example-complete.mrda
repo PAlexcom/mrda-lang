@@ -25,7 +25,7 @@ int func(val int a, res bool b, name char d, const float n, ref bool l) {
     }
 
     // Selection Statement
-    if (proc(counter, b) >= 8) {
+    if (proc(counter, b) && (10 >= 8) || (counter > 5)) {
         int counter = 2;
     } else {
         int counter = 4;
