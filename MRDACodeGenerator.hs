@@ -63,8 +63,21 @@ code_Decl node = case node of
     Dfun _ ident parameters compStmt returnStmt -> do
         modify (\attr -> attr{code = (code attr) ++ (getIdent ident) ++ ":\n" ++ "BeginFunc" ++ "\n"})
         code_CompStmt compStmt
+        code_ReturnStmt returnStmt
         modify (\attr -> attr{code = (code attr) ++ "EndFunc" ++ "\n"})
         return ()
+
+code_ReturnStmt :: ReturnStmt -> State Attributes ()
+code_ReturnStmt returnStmt = case returnStmt of
+    RetExpVoid -> do
+        modify (\attr -> attr{code = (code attr) ++ "Return" ++ "\n"})
+        return ()
+    RetExp rExpr -> do
+        code_RExpr rExpr
+        addr_RExpr <- gets addr
+        modify (\attr -> attr{code = (code attr) ++ "Return " ++ addr_RExpr ++ "\n"})
+        return () 
+
 
 code_CompStmt :: CompStmt -> State Attributes ()
 code_CompStmt (BlockDecl decls stmts) = do
@@ -98,7 +111,7 @@ code_Stmt node = case node of
         code_CompStmt compStmt
         return ()
     ProcCall funCall -> do
-
+        code_FunCall funCall
         return ()
     Jmp jumpStmt -> do
         return ()
@@ -113,6 +126,33 @@ code_Stmt node = case node of
     LExprStmt lExpr -> do
         code_LExpr lExpr
         return ()
+
+code_FunCall :: FunCall -> State Attributes ()
+code_FunCall (Call ident rExprs) = do
+        code_CallParams rExprs []
+        modify (\attr -> attr{code = (code attr) ++ "Call " ++ (getIdent ident) ++ " " ++ (show $ length rExprs) ++ "\n"})
+        return () 
+
+code_CallParams :: [RExpr] -> [String] -> State Attributes ()
+code_CallParams (rExpr:rExprs) params = do
+    code_RExpr rExpr
+    addr_RExpr <- gets addr
+    code_CallParams rExprs (addr_RExpr:params)
+    return ()
+
+code_CallParams [] params = do
+    print_CallParams (reverse params)
+    return ()
+
+print_CallParams :: [String] -> State Attributes ()
+print_CallParams (param:params) = do
+    modify (\attr -> attr{code = (code attr) ++ "Param " ++ param ++ "\n"})
+    print_CallParams params
+    return ()
+
+print_CallParams [] = do
+    return ()
+
 
 code_IterStmt :: IterStmt -> State Attributes ()
 code_IterStmt node = case node of
