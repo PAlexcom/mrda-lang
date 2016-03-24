@@ -13,7 +13,7 @@ bool a = True;
 // Function Declaration
 int func(val int a, res bool b, name char d, const float n, ref bool l) {
     // Basic Declaration
-    //int counter = a;
+    int counter = a;
     //int z = proc(counter, b);
     //counter = a;
 
@@ -36,6 +36,7 @@ int func(val int a, res bool b, name char d, const float n, ref bool l) {
 
     // Jump Statement
     return (1+1);
+    return;
 }
 
 void main() {

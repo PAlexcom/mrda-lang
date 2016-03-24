@@ -15,12 +15,12 @@ compile fileName text = do
     putStrLn "-----------------------\n Tokens \n-----------------------"
     print tokens
     putStrLn "-----------------------\n Abstract Syntax Tree \n-----------------------"
-    print abstractSyntaxTree
     case abstractSyntaxTree of
         Bad msg -> do
             putStrLn ("-----------------------\n !!! Error: " ++ msg ++ " \n-----------------------")
             return ()
         Ok abst -> do
+            print abst
             putStrLn "-----------------------\n Type Checking \n-----------------------"
             print typeCheckingReport
             case isTypeCheckOk of
