@@ -7,6 +7,7 @@ tacGenerator abstractSyntaxTree = execState (code_Program abstractSyntaxTree) de
 
 data Attributes = Attributes {
     code :: String,
+    tac :: [TAC],
     env :: [Char],
     counterTemp :: Int,
     counterLab :: Int,
@@ -16,7 +17,31 @@ data Attributes = Attributes {
     isSelection :: Bool
 } deriving (Show)
 
-defaultAttributes = Attributes "" [] 0 0 "" ("","") "" False
+defaultAttributes = Attributes "" [] [] 0 0 "" ("","") "" False
+
+
+------------------------------------------------------------
+--------------------------- TAC ----------------------------
+------------------------------------------------------------
+data TAC
+    = TACLabel String
+    | TACBinaryOp String String String String
+    | TACAssign String String
+    | TACUnaryOp String String String
+    | TACCondition String String String
+    | TACIf TAC String String
+    | TACGoto String
+    | TACReturn String
+    | TACPreamble String
+    | TACParam String
+    | TACCallVoid String String
+    | TACCall String String String
+    deriving (Show)
+
+addTAC :: TAC -> State Attributes ()
+addTAC tacData = do
+    modify (\attr -> attr{tac = (tac attr) ++ [tacData]})
+    return ()
 
 ------------------------------------------------------------
 ------------------------ Utilities -------------------------
@@ -41,6 +66,8 @@ code_Program (Prog decls) = do
     label <- gets counterLab
     code_Decls decls
     modify (\attr -> attr{code = (code attr) ++ "L" ++ (show label) ++ ":halt" ++ "\n"})
+    addTAC $ TACLabel ("L" ++ (show label))
+    addTAC $ TACPreamble "halt"
     return ()
 
 code_Decls :: [Decl] -> State Attributes ()
@@ -62,20 +89,25 @@ code_Decl node = case node of
         return ()
     Dfun _ ident parameters compStmt returnStmt -> do
         modify (\attr -> attr{code = (code attr) ++ (getIdent ident) ++ ":\n" ++ "BeginFunc" ++ "\n"})
+        addTAC $ TACLabel (getIdent ident)
+        addTAC $ TACPreamble "BeginFunc"
         code_CompStmt compStmt
         code_ReturnStmt returnStmt
         modify (\attr -> attr{code = (code attr) ++ "EndFunc" ++ "\n"})
+        addTAC $ TACPreamble "EndFunc"
         return ()
 
 code_ReturnStmt :: ReturnStmt -> State Attributes ()
 code_ReturnStmt returnStmt = case returnStmt of
     RetExpVoid -> do
         modify (\attr -> attr{code = (code attr) ++ "Return" ++ "\n"})
+        addTAC $ TACReturn ""
         return ()
     RetExp rExpr -> do
         code_RExpr rExpr
         addr_RExpr <- gets addr
         modify (\attr -> attr{code = (code attr) ++ "Return " ++ addr_RExpr ++ "\n"})
+        addTAC $ TACReturn addr_RExpr
         return () 
 
 
@@ -99,6 +131,7 @@ code_Stmts (x:xs) next = do
     modify (\attr -> attr{next = ("L" ++ (show label))})
     code_Stmt x
     modify (\attr -> attr{code = (code attr) ++ "L" ++ (show label) ++ ":\n"})
+    addTAC $ TACLabel ("L" ++ (show label))
     code_Stmts xs next
     return ()
 
@@ -133,12 +166,15 @@ code_FunCall (Call ident rExprs) = do
         modify increaseCounterTemp
         modify (\attr -> attr{addr = "t" ++ (show $ counterTemp attr)})
         modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "= " ++ "Call " ++ (getIdent ident) ++ " " ++ (show $ length rExprs) ++ "\n"})
+        addrAttr <- gets addr
+        addTAC $ TACCall addrAttr (getIdent ident) (show $ length rExprs)
         return () 
 
 code_ProcCall :: FunCall -> State Attributes ()
 code_ProcCall (Call ident rExprs) = do
         code_CallParams rExprs []
         modify (\attr -> attr{code = (code attr) ++ "Call " ++ (getIdent ident) ++ " " ++ (show $ length rExprs) ++ "\n"})
+        addTAC $ TACCallVoid (getIdent ident) (show $ length rExprs)
         return () 
 
 code_CallParams :: [RExpr] -> [String] -> State Attributes ()
@@ -155,6 +191,7 @@ code_CallParams [] params = do
 print_CallParams :: [String] -> State Attributes ()
 print_CallParams (param:params) = do
     modify (\attr -> attr{code = (code attr) ++ "Param " ++ param ++ "\n"})
+    addTAC $ TACParam param
     print_CallParams params
     return ()
 
@@ -172,13 +209,16 @@ code_IterStmt node = case node of
         labelTT <- gets counterLab
         modify (\attr -> attr{ttff = ("L" ++ (show labelTT), next)})
         modify (\attr -> attr{code = (code attr) ++ "L" ++ (show begin) ++ ":\n"})
+        addTAC $ TACLabel ("L" ++ (show begin))
         modify (\attr -> attr{isSelection = True})
         code_RExpr rExpr
         modify (\attr -> attr{isSelection = False})
-        modify (\attr -> attr{code = (code attr) ++ "L" ++ (show labelTT) ++ ":\n"})
         modify (\attr -> attr{next = ("L" ++ (show begin))})
+        modify (\attr -> attr{code = (code attr) ++ "L" ++ (show labelTT) ++ ":\n"})
+        addTAC $ TACLabel ("L" ++ (show labelTT))
         code_Stmt stmt
         modify (\attr -> attr{code = (code attr) ++ " goto L" ++ (show begin) ++ "\n"})
+        addTAC $ TACGoto $ "L" ++ (show begin)
         return ()
     DoWhile stmt rExpr -> do
         return ()
@@ -194,6 +234,7 @@ code_SelectionStmt node = case node of
         code_RExpr rExpr
         modify (\attr -> attr{isSelection = False})
         modify (\attr -> attr{code = (code attr) ++ "L" ++ (show label) ++ ":\n"})
+        addTAC $ TACLabel $ "L" ++ (show label)
         code_Stmt stmt
         return ()
     IfElse rExpr stmt1 stmt2 -> do
@@ -207,9 +248,12 @@ code_SelectionStmt node = case node of
         code_RExpr rExpr
         modify (\attr -> attr{isSelection = False})
         modify (\attr -> attr{code = (code attr) ++ "L" ++ (show labelTT) ++ ":\n"})
+        addTAC $ TACLabel $ "L" ++ (show labelTT)
         code_Stmt stmt1
         modify (\attr -> attr{code = (code attr) ++ " goto " ++ next ++ "\n"})
+        addTAC $ TACGoto next
         modify (\attr -> attr{code = (code attr) ++ "L" ++ (show labelFF) ++ ":\n"})
+        addTAC $ TACLabel $ "L" ++ (show labelFF)
         code_Stmt stmt2
         return ()
 
@@ -227,14 +271,15 @@ code_VarDeclInit (VarDeclIn ident complexRExpr) = do
     (code_ComplexRExpr complexRExpr)
     expr_attr <- get
     modify (\attr -> attr{code = (code attr) ++ (getIdent ident) ++ "=" ++ (addr expr_attr) ++ "\n"})
+    addTAC $ TACAssign (getIdent ident) (addr expr_attr)
 
 code_ComplexRExpr :: ComplexRExpr -> State Attributes ()
 code_ComplexRExpr node = case node of
     Simple rExpr -> do
-                code_RExpr rExpr
-                return ()
+        code_RExpr rExpr
+        return ()
     Array complexRExpr -> do
-                return ()
+        return ()
 
 code_RExpr :: RExpr -> State Attributes ()
 code_RExpr node = case node of
@@ -247,6 +292,7 @@ code_RExpr node = case node of
         addr_RExpr2 <- gets addr
         modify (\attr -> attr{code = (code attr) ++ "if " ++ addr_RExpr1 ++ op ++ addr_RExpr2 ++ " goto " ++ tt ++ " goto " ++ ff ++ "\n"})
         modify (\attr -> attr{isSelection = True})
+        addTAC $ TACIf (TACCondition addr_RExpr1 op addr_RExpr2) tt ff
         return ()
     OpAritm rExpr1 rExpr2 op -> do
         (code_RExpr rExpr1)
@@ -256,6 +302,8 @@ code_RExpr node = case node of
         modify increaseCounterTemp
         modify (\attr -> attr{addr = "t" ++ (show $ counterTemp attr)})
         modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "=" ++ addr_RExpr1 ++ op ++ addr_RExpr2 ++ "\n"})
+        addrAttr <- gets addr
+        addTAC $ TACBinaryOp addrAttr addr_RExpr1 op addr_RExpr2
         return ()
     OpBoolean rExpr1 rExpr2 op -> do
         isSel <- gets isSelection
@@ -269,6 +317,7 @@ code_RExpr node = case node of
                     modify (\attr -> attr{ttff = ("L" ++ (show label),ff)})
                     (code_RExpr rExpr1)
                     modify (\attr -> attr{code = (code attr) ++ "L" ++ (show label) ++ ":\n"})
+                    addTAC $ TACLabel $ "L" ++ (show label)
                     modify (\attr -> attr{ttff = (tt,ff)})
                     (code_RExpr rExpr2)
                     return ()
@@ -279,6 +328,7 @@ code_RExpr node = case node of
                     modify (\attr -> attr{ttff = (tt,"L" ++ (show label))})
                     (code_RExpr rExpr1)
                     modify (\attr -> attr{code = (code attr) ++ "L" ++ (show label) ++ ":\n"})
+                    addTAC $ TACLabel $ "L" ++ (show label)
                     modify (\attr -> attr{ttff = (tt,ff)})
                     (code_RExpr rExpr2)
                     return ()
@@ -291,6 +341,8 @@ code_RExpr node = case node of
                 modify increaseCounterTemp
                 modify (\attr -> attr{addr = "t" ++ (show $ counterTemp attr)})
                 modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "=" ++ addr_RExpr1 ++ op ++ addr_RExpr2 ++ "\n"})
+                addrAttr <- gets addr
+                addTAC $ TACBinaryOp addrAttr addr_RExpr1 op addr_RExpr2
                 return ()
     Not rExpr -> do
         (tt,ff) <- gets ttff
@@ -303,6 +355,8 @@ code_RExpr node = case node of
         modify increaseCounterTemp
         modify (\attr -> attr{addr = "t" ++ (show $ counterTemp attr)})
         modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "= negate" ++ addr_RExpr ++ "\n"})
+        addrAttr <- gets addr
+        addTAC $ TACUnaryOp addrAttr "-" addr_RExpr
         return ()
     Ref lExpr -> do
         return ()
@@ -330,6 +384,7 @@ code_RExpr node = case node of
                         do
                         (tt,_) <- gets ttff 
                         modify (\attr -> attr{code = (code attr) ++ " goto " ++ tt ++ "\n"})
+                        addTAC $ TACGoto tt
                         return ()
                     else
                         do
@@ -342,6 +397,7 @@ code_RExpr node = case node of
                         do
                         (_,ff) <- gets ttff 
                         modify (\attr -> attr{code = (code attr) ++ " goto " ++ ff ++ "\n"})
+                        addTAC $ TACGoto ff
                         return ()
                     else
                         do
@@ -353,6 +409,8 @@ code_RExpr node = case node of
         modify increaseCounterTemp
         modify (\attr -> attr{addr = "t" ++ (show $ counterTemp attr)})
         modify (\attr -> attr{code = (code attr) ++ (addr attr) ++ "=" ++ addr_LExpr ++ "\n"})
+        addrAttr <- gets addr
+        addTAC $ TACAssign addrAttr addr_LExpr
         return ()
 
 code_LExpr :: LExpr -> State Attributes ()
@@ -365,6 +423,7 @@ code_LExpr node = case node of
         modify increaseCounterTemp
         modify (\attr -> attr{addr = addr_LExpr})
         modify (\attr -> attr{code = (code attr) ++ addr_LExpr ++ "=" ++ addr_LExpr ++ " + 1" ++ "\n"})
+        addTAC $ TACBinaryOp addr_LExpr addr_LExpr "+" "1"
         return ()
     PreDecr lExpr -> do
         code_LExpr lExpr
@@ -372,6 +431,7 @@ code_LExpr node = case node of
         modify increaseCounterTemp
         modify (\attr -> attr{addr = addr_LExpr})
         modify (\attr -> attr{code = (code attr) ++ addr_LExpr ++ "=" ++ addr_LExpr ++ " - 1" ++ "\n"})
+        addTAC $ TACBinaryOp addr_LExpr addr_LExpr "-" "1"
         return ()
     PostInc lExpr -> do
         return ()
