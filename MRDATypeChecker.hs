@@ -228,7 +228,7 @@ check_Decl node = case node of
         return ()
         where
             tp = getTypeSpecSafe typeSpec
-    Dfun basicType ident parameters compStmt -> do
+    Dfun basicType ident parameters compStmt returnStmt -> do
         -- TODO creare un nuovo ambiente
         pushToEnv $ FuncElem (getIdent ident) (getBasicType basicType) (serializeEnvParameters parameters)
         pushToEnvFuncParams parameters

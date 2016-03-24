@@ -135,14 +135,14 @@ ListRExpr : {- empty -}             { [] }
 BLExpr : BLExpr '[' RExpr ']'       { ArrayEl $1 $3 }
     | Ident                         { Id $1 }
 
-Program : ListDecl                                      { Prog (reverse $1) }
+Program : ListDecl                  { Prog (reverse $1) }
 
-ListDecl : {- empty -}                                  { [] }
-    | ListDecl Decl                                     { flip (:) $1 $2 }
+ListDecl : {- empty -}              { [] }
+    | ListDecl Decl                 { flip (:) $1 $2 }
 
-Decl : BasicType ListVarDeclInit ';'                    { DvarBInit $1 $2 }
-    | TypeSpec ListVarDeclInit ';'                      { DvarCInit $1 $2 }
-    | BasicType Ident '(' ListParameter ')' CompStmt    { Dfun $1 $2 $4 $6 }
+Decl : BasicType ListVarDeclInit ';'                                      { DvarBInit $1 $2 }
+    | TypeSpec ListVarDeclInit ';'                                        { DvarCInit $1 $2 }
+    | BasicType Ident '(' ListParameter ')' '{' CompStmt ReturnStmt '}'   { Dfun $1 $2 $4 $7 $8 }
 
 ListVarDeclInit : VarDeclInit                           { (:[]) $1 }
     | VarDeclInit ',' ListVarDeclInit                   { (:) $1 $3 }
@@ -176,12 +176,12 @@ Modality : {- empty -}                                  { ModalityEmpty }
     | 'valres'                                          { Modality_valres }
     | 'name'                                            { Modality_name }
 
-CompStmt : '{' ListDecl ListStmt '}'                    { BlockDecl (reverse $2) (reverse $3) }
+CompStmt : ListDecl ListStmt                    { BlockDecl (reverse $1) (reverse $2) }
 
 ListStmt : {- empty -}                                  { [] }
     | ListStmt Stmt                                     { flip (:) $1 $2 }
 
-Stmt : CompStmt                                         { Comp $1 }
+Stmt : '{' CompStmt '}'                                 { Comp $2 }
      | FunCall ';'                                      { ProcCall $1 }
      | JumpStmt ';'                                     { Jmp $1 }
      | IterStmt                                         { Iter $1 }
@@ -197,8 +197,10 @@ Assignment_op : '='                                     { Assign }
 
 JumpStmt : 'break'                                      { Break }
     | 'continue'                                        { Continue }
-    | 'return'                                          { RetExpVoid }
-    | 'return' '(' RExpr ')'                            { RetExp $3 }
+
+ReturnStmt : 'return' ';'                                   { RetExpVoid }
+    | 'return' '(' RExpr ')' ';'                            { RetExp $3 }
+ 
 
 SelectionStmt : 'if' '(' RExpr ')' Stmt 'else' Stmt     { IfElse $3 $5 $7 }
     | 'if' '(' RExpr ')' Stmt                           { IfNoElse $3 $5 }
@@ -254,7 +256,7 @@ data Program =
 data Decl
     = DvarBInit BasicType [VarDeclInit]
     | DvarCInit TypeSpec [VarDeclInit]
-    | Dfun BasicType Ident [Parameter] CompStmt
+    | Dfun BasicType Ident [Parameter] CompStmt ReturnStmt
     deriving (Eq, Ord, Show, Read)
 
 data TypeSpec
@@ -323,9 +325,12 @@ data Assignment_op
 data JumpStmt
     = Break
     | Continue
-    | RetExpVoid
-    | RetExp RExpr
     deriving (Eq, Ord, Show, Read)
+
+data ReturnStmt 
+    = RetExpVoid
+    | RetExp RExpr
+    deriving (Eq, Ord, Show, Read) 
 
 data SelectionStmt = IfNoElse RExpr Stmt | IfElse RExpr Stmt Stmt
   deriving (Eq, Ord, Show, Read)

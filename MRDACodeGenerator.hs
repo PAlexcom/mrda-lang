@@ -60,7 +60,7 @@ code_Decl node = case node of
     DvarCInit _ varDeclInits -> do
         code_VarDeclInits varDeclInits
         return ()
-    Dfun _ ident parameters compStmt -> do
+    Dfun _ ident parameters compStmt returnStmt -> do
         modify (\attr -> attr{code = (code attr) ++ (getIdent ident) ++ ":\n" ++ "BeginFunc" ++ "\n"})
         code_CompStmt compStmt
         modify (\attr -> attr{code = (code attr) ++ "EndFunc" ++ "\n"})
