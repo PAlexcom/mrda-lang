@@ -1,4 +1,4 @@
-module MRDACompiler where 
+module Main where 
 
 import System.IO ( stdin, hGetContents )
 import System.Environment ( getArgs, getProgName )
@@ -9,6 +9,7 @@ import MRDAParser
 import MRDACodeGenerator
 import MRDATypeChecker
 import Error
+import PrettyOur
 
 compileFile fileName = putStrLn fileName >> readFile fileName >>= compile fileName
 compile fileName text = do
@@ -30,6 +31,8 @@ compile fileName text = do
                     print tacAttr
                     putStrLn "-----------------------\n TAC Source Code \n-----------------------"
                     putStrLn $ code tacAttr
+                    putStrLn "-----------------------\n TAC Pretty \n-----------------------"
+                    putStrLn $ stampa $ tac tacAttr
                     where
                         tacAttr = tacGenerator abst
                 Bad msg -> putStrLn ("-----------------------\n!!! Error: " ++ msg ++ " \n-----------------------")

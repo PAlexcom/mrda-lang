@@ -6,6 +6,7 @@ import Error
 
 -----
 ----- * Gestire il case di 'if' e 'while'
+----- * Passaggio per costante, non può essere modificato il suo valore all'interno del blocco, non può comparire a sinistra di una dichiarazione
 -----
 
 data Attributes = Attributes {
@@ -378,7 +379,7 @@ check_RExpr node env = case node of
             tp2 = check_RExpr rExpr2 env
     Not rExpr -> check_RExpr rExpr env
     Neg rExpr -> check_RExpr rExpr env
-    Ref lExpr -> checkTypesFakeSafe  -- FIXME in case of any type, fixit later
+    Ref lExpr -> check_LExpr lExpr env
     FCall funCall -> getFunctionType funCall env
     Int integer -> Ok "int"
     Char char -> Ok "char"
