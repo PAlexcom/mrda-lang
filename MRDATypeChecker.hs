@@ -25,11 +25,31 @@ data Enviroment
     }
     deriving (Show)
 
+--data EnviromentElement
+--    =  FuncElem {ident :: String, tp :: String, params :: [String]}
+--    | VarElem {ident :: String, tp :: String}
+--    | ArrayElem {ident :: String, tp :: String, dim :: Int}
+--    deriving (Show, Eq)
+
 data EnviromentElement
-    =  FuncElem {ident :: String, tp :: String, params :: [String]}
-    | VarElem {ident :: String, tp :: String}
-    | ArrayElem {ident :: String, tp :: String, dim :: Int}
+    =  FuncElem {ident :: String, tp :: Type, params :: [Type]}
+    | VarElem {ident :: String, tp :: Type}
+    | ArrayElem {ident :: String, tp :: Type, dim :: Int}
     deriving (Show, Eq)
+
+
+
+data Type 
+    = TypeInt
+    | TypeChar
+    | TypeBool
+    | TypeFloat
+    | TypeString
+    | TypeVoid
+    | TypeArray Type Int
+    | TypePointer Type
+    | TypeError String
+    deriving (Eq, Show, Read)
 
 ------------------------------------------------------------
 --------- Utilities ----------------------------------------
@@ -77,7 +97,8 @@ pushToEnvFuncParams ((Param _ tp ident):params) = do
     pushToEnv $ VarElem (getIdent ident) (getTypeSpec tp)
     return ()
 
-serializeEnvParameters :: [Parameter] -> [String]
+--serializeEnvParameters :: [Parameter] -> [String]
+serializeEnvParameters :: [Parameter] -> [Type]
 serializeEnvParameters [] = []
 serializeEnvParameters ((Param _ tp ident):params)
     = (getTypeSpec tp) : serializeEnvParameters params
@@ -85,21 +106,31 @@ serializeEnvParameters ((Param _ tp ident):params)
 getIdent :: Ident -> String
 getIdent (Ident ident) = ident
 
-getBasicType :: BasicType -> String
-getBasicType (BType tp) = tp
+--getBasicType :: BasicType -> String
+--getBasicType (BType tp) = tp
+getBasicType :: BasicType -> Type
+getBasicType (BType tp) = case tp of 
+    "bool"  -> TypeBool
+    "int"   -> TypeInt
+    "char"  -> TypeChar
+    "float" -> TypeFloat
+    "string"-> TypeString
+    "void"  -> TypeVoid
 
-getBasicTypeSafe :: BasicType -> Err String
+getBasicTypeSafe :: BasicType -> Err Type
 getBasicTypeSafe tp = Ok (getBasicType tp)
 
-getTypeSpec :: TypeSpec -> String
+--getTypeSpec :: TypeSpec -> String
+getTypeSpec :: TypeSpec -> Type
 getTypeSpec node = case node of
     BasTyp basicType -> getBasicType basicType
     CompType compoundType -> getCompoundType compoundType
 
-getTypeSpecSafe :: TypeSpec -> Err String
+getTypeSpecSafe :: TypeSpec -> Err Type
 getTypeSpecSafe node = Ok (getTypeSpec node)
 
-getCompoundType :: CompoundType -> String
+--getCompoundType :: CompoundType -> String
+getCompoundType :: CompoundType -> Type
 getCompoundType node = case node of
     ArrDef typeSpec integer -> checkTypesFake -- TODO
     ArrUnDef typeSpec -> checkTypesFake -- TODO
@@ -108,42 +139,75 @@ getCompoundType node = case node of
 ------------------------------------------------------------
 --------- Type Checker -------------------------------------
 ------------------------------------------------------------
-checkTypes :: Err String -> Err String -> Err String
-checkTypes first second = case first of
-    Ok tp -> case second of
-        Ok tp2 -> if tp == tp2
-            then Ok tp
-            else Bad ("error type: " ++ tp ++ " different from type: " ++ tp2)
-        Bad msg2 -> Bad msg2
-    Bad msg -> Bad msg
 
-checkBoolTypes :: Err String -> Err String -> Err String
+type2string :: Type -> String
+type2string tp = case tp of
+    TypeInt             -> "Int" 
+    TypeChar            -> "Char"
+    TypeBool            -> "Bool"
+    TypeFloat           -> "Float"
+    TypeString          -> "String"
+    TypeVoid            -> "Void"
+    TypeArray tp int    -> "Array"
+    TypePointer tp      -> "Pointer"
+    TypeError msg       -> "Error"
+
+checkTypes :: Err Type -> Err Type -> Err Type
+checkTypes (Ok t1) (Ok t2)  = checkGoodTypes t1 t2
+checkTypes (Bad msg) _      = Bad msg
+checkTypes _ (Bad msg)      = Bad msg
+
+checkGoodTypes :: Type -> Type -> Err Type
+checkGoodTypes t1 t2 
+    | t1 == t2  = Ok t1
+    | otherwise =  getMaxType t1 t2
+
+getMaxType :: Type -> Type -> Err Type
+getMaxType TypeInt TypeFloat = Ok TypeFloat
+getMaxType TypeFloat TypeInt = Ok TypeFloat
+getMaxType TypeChar TypeString = Ok TypeString
+getMaxType TypeString TypeChar = Ok TypeString
+getMaxType _ _ = Bad "i tipi non sono compatibili"
+
+--checkTypes :: Err Type -> Err Type -> Err Type
+--checkTypes first second = case first of
+--    Ok tp -> case second of
+--        Ok tp2 -> if tp == tp2
+--            then Ok tp
+--            else Bad ("error type: " ++ tp ++ " different from type: " ++ tp2)
+--        Bad msg2 -> Bad msg2
+--    Bad msg -> Bad msg
+
+checkBoolTypes :: Err Type -> Err Type -> Err Type
 checkBoolTypes first second = case check of
-    Ok tp -> if (tp == "bool")
+    Ok tp -> if (tp == TypeBool)
         then Ok tp
-        else Bad ("error type: " ++ tp ++ "must be of type 'bool'")
+        else Bad ("error type: must be of type 'bool'")
     Bad msg -> Bad msg
     where
         check = checkTypes first second
 
-checkAritmTypes :: Err String -> Err String -> Err String
+checkAritmTypes :: Err Type -> Err Type -> Err Type
 checkAritmTypes first second = case check of
-    Ok tp -> if (tp == "int" || tp == "float")
+    Ok tp -> if (tp == TypeInt || tp == TypeFloat)
         then Ok tp
-        else Bad ("error type: " ++ tp ++ "must be of type 'bool'")
+        else Bad ("error type: must be of type 'int'")
     Bad msg -> Bad msg
     where
         check = checkTypes first second
 
-checkRelTypes :: Err String -> Err String -> Err String
+checkAritmType :: Err Type -> Bool
+checkAritmType tp = (tp == (Ok TypeInt)) || (tp == (Ok TypeFloat)) 
+
+checkRelTypes :: Err Type -> Err Type -> Err Type
 checkRelTypes first second = checkAritmTypes first second
 
-checkIdentType :: String -> Enviroment -> Err String
+checkIdentType :: String -> Enviroment -> Err Type
 checkIdentType name env = case (isIdentInEnv name env) of
     Just tp -> Ok tp
     Nothing -> Bad ("Variable name: " ++ name ++ " is not declared in the scope")
 
-isIdentInEnv :: String -> Enviroment -> Maybe String
+isIdentInEnv :: String -> Enviroment -> Maybe Type
 isIdentInEnv name env = case match of
     Just params -> Just params
     Nothing -> case parentEnv of
@@ -154,24 +218,24 @@ isIdentInEnv name env = case match of
         varsEnv = vars env
         match = isIdentInVars name varsEnv
 
-isIdentInVars :: String -> [EnviromentElement] -> Maybe String
+isIdentInVars :: String -> [EnviromentElement] -> Maybe Type
 isIdentInVars name [] = Nothing
 
 isIdentInVars name ((VarElem ident tp):vars) = if name == ident
     then Just tp
     else isIdentInVars name vars
 
-checkTypesFakeSafe :: Err String
-checkTypesFakeSafe = Ok "null"
+checkTypesFakeSafe :: Err Type
+checkTypesFakeSafe = Bad "Type Fake"
 
-checkTypesFake :: String
-checkTypesFake = "null"
+checkTypesFake :: Type
+checkTypesFake = TypeError "Type fake"
 
-getFunctionType :: FunCall -> Enviroment -> Err String
+getFunctionType :: FunCall -> Enviroment -> Err Type
 getFunctionType (Call ident rExprs) env = isFunCallGood (getIdent ident) rExprs env
 
 
-isFuncInEnv :: String -> Enviroment -> Maybe (String, [String])
+isFuncInEnv :: String -> Enviroment -> Maybe (Type, [Type])
 isFuncInEnv funcName env = case match of
     Just (tp,params) -> Just (tp,params)
     Nothing -> case parentEnv of
@@ -182,20 +246,20 @@ isFuncInEnv funcName env = case match of
         funcsEnv = funcs env
         match = isFuncInFuncs funcName funcsEnv
 
-isFuncInFuncs :: String -> [EnviromentElement] -> Maybe (String,[String])
+isFuncInFuncs :: String -> [EnviromentElement] -> Maybe (Type,[Type])
 isFuncInFuncs funcName [] = Nothing
 
 isFuncInFuncs funcName ((FuncElem ident tp params):funcs) = if funcName == ident
     then Just (tp, params)
     else isFuncInFuncs funcName funcs
 
-isFunCallGood :: String -> [RExpr] -> Enviroment -> Err String
+isFunCallGood :: String -> [RExpr] -> Enviroment -> Err Type
 isFunCallGood funcName rExprs env = 
     case (isFuncInEnv funcName env) of
         Just (tp, params) ->
             case (check_RExprs rExprs params env) of
-                Ok _ -> Ok tp
-                Bad msg -> Bad ("Error in procedure call: " ++ funcName ++ " error: " ++ msg)
+                Nothing -> Ok tp
+                Just msg -> Bad ("Error in procedure call: " ++ funcName ++ " error: " ++ msg)
         Nothing -> Bad ("Function: " ++ funcName ++ " is not declared in the scope")
 
 ------------------------------------------------------------
@@ -256,9 +320,9 @@ check_Decl node = case node of
                 return()
         return()
 
-check_ReturnStmt :: ReturnStmt -> Enviroment -> Err String
+check_ReturnStmt :: ReturnStmt -> Enviroment -> Err Type
 check_ReturnStmt node env = case node of
-    RetExpVoid -> Ok "void"
+    RetExpVoid -> Ok TypeVoid
     RetExp rExpr -> check_RExpr rExpr env
 
 check_CompStmt :: CompStmt -> State Attributes ()
@@ -325,17 +389,17 @@ check_FunCall (Call ident rExprs) = do
     where
         funcName = getIdent ident
 
-check_RExprs :: [RExpr] -> [String] -> Enviroment -> Err String
-check_RExprs [] [] _ = Ok ""
-check_RExprs (x:xs) [] env = Bad "different function arguments number"
-check_RExprs [] (x:xs) env = Bad "different function arguments number"
+check_RExprs :: [RExpr] -> [Type] -> Enviroment -> Maybe String
+check_RExprs [] [] _ = Nothing 
+check_RExprs (x:xs) [] env = Just "different function arguments number"
+check_RExprs [] (x:xs) env = Just "different function arguments number"
 check_RExprs (rExpr:rExprs) (param:params) env = case (check_RExpr rExpr env) of
-    Ok tp -> if tp == param
-        then Ok ""
-        else Bad "argument types are not equal"
-    Bad msg -> Bad msg
+    Ok tp -> case (checkGoodTypes tp param) of 
+                Ok _    -> check_RExprs rExprs params env
+                Bad _   -> Just "argument types are not equal"
+    Bad msg -> Just msg
 
-check_VarDeclInits :: Err String -> [VarDeclInit] -> State Attributes ()
+check_VarDeclInits :: Err Type -> [VarDeclInit] -> State Attributes ()
 check_VarDeclInits tp [] = do
     return ()
 
@@ -344,7 +408,7 @@ check_VarDeclInits tp (x:xs) = do
     check_VarDeclInits tp xs
     return ()
 
-check_VarDeclInit :: Err String -> VarDeclInit -> State Attributes ()
+check_VarDeclInit :: Err Type -> VarDeclInit -> State Attributes ()
 check_VarDeclInit tp node = do 
     env <- gets env
     case node of
@@ -358,12 +422,12 @@ check_VarDeclInit tp node = do
     return ()
 
 
-check_ComplexRExpr :: ComplexRExpr -> Enviroment -> Err String
+check_ComplexRExpr :: ComplexRExpr -> Enviroment -> Err Type
 check_ComplexRExpr node env = case node of
     Simple rExpr -> check_RExpr rExpr env
     Array complexRExpr -> checkTypesFakeSafe
 
-check_RExpr :: RExpr -> Enviroment -> Err String
+check_RExpr :: RExpr -> Enviroment -> Err Type
 check_RExpr node env = case node of
     OpRelation rExpr1 rExpr2 _ -> checkRelTypes tp1 tp2
         where
@@ -381,48 +445,48 @@ check_RExpr node env = case node of
     Neg rExpr -> check_RExpr rExpr env
     Ref lExpr -> check_LExpr lExpr env
     FCall funCall -> getFunctionType funCall env
-    Int integer -> Ok "int"
-    Char char -> Ok "char"
-    String string -> Ok "string"
-    Float double -> Ok "float"
-    Bool boolean -> Ok "bool"
+    Int integer -> Ok TypeInt
+    Char char -> Ok TypeChar
+    String string -> Ok TypeString
+    Float double -> Ok TypeFloat
+    Bool boolean -> Ok TypeBool
     Lexpr lExpr -> check_LExpr lExpr env
 
-check_LExpr :: LExpr -> Enviroment -> Err String
+check_LExpr :: LExpr -> Enviroment -> Err Type
 check_LExpr node env = case node of
     Deref rExpr -> case tpRExpr of
-        Ok tp -> if (tpRExpr == Ok "int" || tpRExpr == Ok "float")
+        Ok tp -> if checkAritmType tpRExpr
             then Ok tp
-            else Bad ("Deref expressions must be of type int or float, but: " ++ tp ++ " found")
+            else Bad ("Deref expressions must be of type int or float, but: " ++ (type2string tp) ++ " found")
         Bad msg -> Bad msg
         where tpRExpr = check_RExpr rExpr env
     PreInc lExpr -> case tpLExpr of
-        Ok tp -> if (tpLExpr == Ok "int" || tpLExpr == Ok "float")
+        Ok tp -> if checkAritmType tpLExpr
             then Ok tp
-            else Bad ("PreInc expressions must be of type int or float, but: " ++ tp ++ " found")
+            else Bad ("PreInc expressions must be of type int or float, but: " ++ (type2string tp) ++ " found")
         Bad msg -> Bad msg
         where tpLExpr = check_LExpr lExpr env
     PreDecr lExpr -> case tpLExpr of
-        Ok tp -> if (tpLExpr == Ok "int" || tpLExpr == Ok "float")
+        Ok tp -> if checkAritmType tpLExpr
             then Ok tp
-            else Bad ("PreInc expressions must be of type int or float, but: " ++ tp ++ " found")
+            else Bad ("PreInc expressions must be of type int or float, but: " ++ (type2string tp) ++ " found")
         Bad msg -> Bad msg
         where tpLExpr = check_LExpr lExpr env
     PostInc lExpr -> case tpLExpr of
-        Ok tp -> if (tpLExpr == Ok "int" || tpLExpr == Ok "float")
+        Ok tp -> if checkAritmType tpLExpr
             then Ok tp
-            else Bad ("PosInc expressions must be of type int or float, but: " ++ tp ++ " found")
+            else Bad ("PosInc expressions must be of type int or float, but: " ++ (type2string tp) ++ " found")
         Bad msg -> Bad msg
         where tpLExpr = check_LExpr lExpr env
     PostDecr lExpr -> case tpLExpr of
-        Ok tp -> if (tpLExpr == Ok "int" || tpLExpr == Ok "float")
+        Ok tp -> if checkAritmType tpLExpr
             then Ok tp
-            else Bad ("PostDecr expressions must be of type int or float, but: " ++ tp ++ " found")
+            else Bad ("PostDecr expressions must be of type int or float, but: " ++ (type2string tp) ++ " found")
         Bad msg -> Bad msg
         where tpLExpr = check_LExpr lExpr env
     BasLExpr bLExpr -> check_BLExpr bLExpr env
 
-check_BLExpr :: BLExpr -> Enviroment -> Err String
+check_BLExpr :: BLExpr -> Enviroment -> Err Type
 check_BLExpr node env = case node of
     ArrayEl bLExpr rExpr -> checkTypesFakeSafe -- TODO
     Id ident -> checkIdentType (getIdent ident) env
