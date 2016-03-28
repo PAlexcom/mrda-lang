@@ -1,4 +1,4 @@
-module PrettyOur where
+module MRDAPrettyPrinterTAC where
 
 import MRDACodeGenerator
 
@@ -17,6 +17,6 @@ control x = case x of
             TACCallVoid  id npar ->  "Call " ++ id ++  "," ++ npar ++ "\n"
             TACCall var id npar ->  var ++ " = " ++ "Call " ++ id ++  "," ++ npar ++ "\n"
 
-stampa :: [TAC] -> String
-stampa [] = ""
-stampa (x:xs) = (control x) ++ (stampa xs)
+prettyPrintTAC :: [TAC] -> String
+prettyPrintTAC [] = ""
+prettyPrintTAC (x:xs) = (control x) ++ (prettyPrintTAC xs)

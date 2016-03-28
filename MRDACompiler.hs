@@ -9,7 +9,8 @@ import MRDAParser
 import MRDACodeGenerator
 import MRDATypeChecker
 import Error
-import PrettyOur
+import MRDAPrettyPrinterTAC
+import MRDAPrettyPrinterABS
 
 compileFile fileName = putStrLn fileName >> readFile fileName >>= compile fileName
 compile fileName text = do
@@ -22,17 +23,19 @@ compile fileName text = do
             return ()
         Ok abst -> do
             print abst
+            putStrLn "-----------------------\n ABS Pretty Printer \n-----------------------"
+            putStrLn $ prettyPrintABS abst
             putStrLn "-----------------------\n Type Checking \n-----------------------"
             print typeCheckingReport
             case isTypeCheckOk of
                 Ok _ -> do
-                    putStrLn "-----------------------\n OK :) Type Checking \n-----------------------"
+                    putStrLn "-----------------------\n OK | Type Checking \n-----------------------"
                     putStrLn "-----------------------\n TAC \n-----------------------"
                     print tacAttr
                     putStrLn "-----------------------\n TAC Source Code \n-----------------------"
                     putStrLn $ code tacAttr
-                    putStrLn "-----------------------\n TAC Pretty \n-----------------------"
-                    putStrLn $ stampa $ tac tacAttr
+                    putStrLn "-----------------------\n TAC Pretty Printer \n-----------------------"
+                    putStrLn $ prettyPrintTAC $ tac tacAttr
                     where
                         tacAttr = tacGenerator abst
                 Bad msg -> putStrLn ("-----------------------\n!!! Error: " ++ msg ++ " \n-----------------------")
