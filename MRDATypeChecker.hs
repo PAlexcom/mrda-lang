@@ -20,21 +20,17 @@ data Enviroment
     = Env {
         vars :: [EnviromentElement],
         arrays :: [EnviromentElement],
+        pointers :: [EnviromentElement],
         funcs :: [EnviromentElement],
         parent :: Maybe Enviroment
     }
     deriving (Show)
 
---data EnviromentElement
---    =  FuncElem {ident :: String, tp :: String, params :: [String]}
---    | VarElem {ident :: String, tp :: String}
---    | ArrayElem {ident :: String, tp :: String, dim :: Int}
---    deriving (Show, Eq)
-
 data EnviromentElement
-    =  FuncElem {ident :: String, tp :: Type, params :: [Type]}
+    =  FuncElem {ident :: String, tp :: Type, params :: [Type]} -- TODO Bisogna modificare per aggiungere la modalità
     | VarElem {ident :: String, tp :: Type}
     | ArrayElem {ident :: String, tp :: Type, dim :: Int}
+    | PointerElem {ident :: String, tp :: Type}
     deriving (Show, Eq)
 
 
@@ -55,7 +51,7 @@ data Type
 --------- Utilities ----------------------------------------
 ------------------------------------------------------------
 
-defaultAttributes = Attributes (Ok "") (Env [] [] [] Nothing) 0 0
+defaultAttributes = Attributes (Ok "") (Env [] [] [] [] Nothing) 0 0
 
 increaseCounter :: Attributes -> Attributes
 increaseCounter attr = attr {counter = (counter attr) + 1}
@@ -71,7 +67,7 @@ setError msg = do
 setParentEnv :: State Attributes ()
 setParentEnv = do
     oldEnv <- gets env
-    modify (\attr -> attr {env = (Env {vars = [], arrays = [], funcs = [], parent = Just oldEnv})})
+    modify (\attr -> attr {env = (Env {vars = [], arrays = [], pointers = [], funcs = [], parent = Just oldEnv})})
     return ()
 
 pushToEnv :: EnviromentElement -> State Attributes ()
@@ -169,14 +165,6 @@ getMaxType TypeChar TypeString = Ok TypeString
 getMaxType TypeString TypeChar = Ok TypeString
 getMaxType _ _ = Bad "i tipi non sono compatibili"
 
---checkTypes :: Err Type -> Err Type -> Err Type
---checkTypes first second = case first of
---    Ok tp -> case second of
---        Ok tp2 -> if tp == tp2
---            then Ok tp
---            else Bad ("error type: " ++ tp ++ " different from type: " ++ tp2)
---        Bad msg2 -> Bad msg2
---    Bad msg -> Bad msg
 
 checkBoolTypes :: Err Type -> Err Type -> Err Type
 checkBoolTypes first second = case check of

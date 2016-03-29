@@ -176,7 +176,7 @@ Modality : {- empty -}                                  { ModalityEmpty }
     | 'valres'                                          { Modality_valres }
     | 'name'                                            { Modality_name }
 
-CompStmt : ListDecl ListStmt                    { BlockDecl (reverse $1) (reverse $2) }
+CompStmt : ListDecl ListStmt                            { BlockDecl (reverse $1) (reverse $2) }
 
 ListStmt : {- empty -}                                  { [] }
     | ListStmt Stmt                                     { flip (:) $1 $2 }
@@ -198,8 +198,8 @@ Assignment_op : '='                                     { Assign }
 JumpStmt : 'break'                                      { Break }
     | 'continue'                                        { Continue }
 
-ReturnStmt : 'return' ';'                                   { RetExpVoid }
-    | 'return' '(' RExpr ')' ';'                            { RetExp $3 }
+ReturnStmt : 'return' ';'                               { RetExpVoid }
+    | 'return' '(' RExpr ')' ';'                        { RetExp $3 }
  
 
 SelectionStmt : 'if' '(' RExpr ')' Stmt 'else' Stmt     { IfElse $3 $5 $7 }
