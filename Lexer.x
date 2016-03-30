@@ -1,7 +1,7 @@
 {
 {-# OPTIONS -fno-warn-incomplete-patterns #-}
 {-# OPTIONS_GHC -w #-}
-module MRDALexer where
+module Lexer where
 
 import qualified Data.Bits
 import Data.Word (Word8)
@@ -20,7 +20,7 @@ $universal = [\0-\255]                          -- universal: any character
     \( | \) | \| \| | \& \& | \! | \= \= | \! \= | \< | \< \= |
     \> | \> \= | \+ | \- | \* | \/ | \% | \^ | \& |
     \, | \+ \+ | \- \- | \[ | \] | \; | \= | \{ | \} |
-    \* \= | \+ \= | \/ \= | \- \=
+    \* \= | \+ \= | \/ \= | \- \= | \:
 
 tokens :-
     -- Toss single line commenTokenSymbols
@@ -32,26 +32,27 @@ tokens :-
     @reservedSyms                           {  \p s -> Token p (TokenSymbols s) }
     $digit+                                 {  \p s -> Token p (TokenInt s) }
     $digit+ \. $digit+ (e (\-)? $digit+)?   {  \p s -> Token p (TokenDouble s) }
-    "False"                                 {  \p s -> Token p (TokenSymbols s) }
-    "True"                                  {  \p s -> Token p (TokenSymbols s) }
-    "bool"                                  {  \p s -> Token p (TokenSymbols s) }
+    "false"                                 {  \p s -> Token p (TokenSymbols s) }
+    "true"                                  {  \p s -> Token p (TokenSymbols s) }
+    "Boolean"                               {  \p s -> Token p (TokenSymbols s) }
     "break"                                 {  \p s -> Token p (TokenSymbols s) }
-    "char"                                  {  \p s -> Token p (TokenSymbols s) }
-    "const"                                 {  \p s -> Token p (TokenSymbols s) }
+    "Char"                                  {  \p s -> Token p (TokenSymbols s) }
     "continue"                              {  \p s -> Token p (TokenSymbols s) }
     "do"                                    {  \p s -> Token p (TokenSymbols s) }
     "else"                                  {  \p s -> Token p (TokenSymbols s) }
-    "float"                                 {  \p s -> Token p (TokenSymbols s) }
+    "Float"                                 {  \p s -> Token p (TokenSymbols s) }
+    "Array"                                 {  \p s -> Token p (TokenSymbols s) }
+    "String"                                {  \p s -> Token p (TokenSymbols s) }
     "if"                                    {  \p s -> Token p (TokenSymbols s) }
-    "int"                                   {  \p s -> Token p (TokenSymbols s) }
-    "name"                                  {  \p s -> Token p (TokenSymbols s) }
-    "ref"                                   {  \p s -> Token p (TokenSymbols s) }
-    "res"                                   {  \p s -> Token p (TokenSymbols s) }
+    "Int"                                   {  \p s -> Token p (TokenSymbols s) }
     "return"                                {  \p s -> Token p (TokenSymbols s) }
     "val"                                   {  \p s -> Token p (TokenSymbols s) }
+    "var"                                   {  \p s -> Token p (TokenSymbols s) }
     "valres"                                {  \p s -> Token p (TokenSymbols s) }
-    "void"                                  {  \p s -> Token p (TokenSymbols s) }
+    "Unit"                                  {  \p s -> Token p (TokenSymbols s) }
     "while"                                 {  \p s -> Token p (TokenSymbols s) }
+    "for"                                   {  \p s -> Token p (TokenSymbols s) }
+    "def"                                   {  \p s -> Token p (TokenSymbols s) }
     $alpha $ident*                          {  \p s -> Token p (TokenIdent s) }
     \" ([$universal # [\" \\ \n]]
         | (\\ (\" | \\ | \' | n | t)))* \"  {  \p s -> Token p (TokenAlpha s) }
@@ -69,8 +70,8 @@ data Tok =
     deriving (Eq,Show,Ord)
 
 data Token =
-    Token Posn Tok
-    | Err Posn
+    Token {tpos::Posn, tok::Tok}
+    | Err {tPost::Posn}
     deriving (Eq,Show,Ord)
 
 tokenPos :: [Token] -> String

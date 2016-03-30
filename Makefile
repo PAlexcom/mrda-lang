@@ -4,10 +4,10 @@ build: lexer parser
 
 
 lexer: 
-		alex MRDALexer.x
+		alex Lexer.x
 
 parser: 
-		happy MRDAParser.y
+		happy Parser.y
 
 clean:
-		rm MRDALexer.hs MRDAParser.hs
+		rm Lexer.hs Parser.hs
