@@ -15,8 +15,8 @@ cabal.sandbox.config
 *.hp
 .DS_Store
 .stack-work/
-MRDALexer.hs
-MRDAParser.hs
+Lexer.hs
+Parser.hs
 *.tac
 *.info
 .idea

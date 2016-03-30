@@ -75,8 +75,8 @@ data Token =
     deriving (Eq,Show,Ord)
 
 tokenPos :: [Token] -> String
-tokenPos (Token (Pn _ l _) _ :_) = "line " ++ show l
-tokenPos (Err (Pn _ l _) :_) = "line " ++ show l
+tokenPos (Token (Pn l _) _ :_) = "line " ++ show l
+tokenPos (Err (Pn l _) :_) = "line " ++ show l
 tokenPos _ = "end of file"
 
 tokenPosn :: Token -> Posn
@@ -87,7 +87,7 @@ tokenLineCol :: Token -> (Int, Int)
 tokenLineCol = posLineCol . tokenPosn
 
 posLineCol :: Posn -> (Int, Int)
-posLineCol (Pn _ l c) = (l,c)
+posLineCol (Pn l c) = (l,c)
 
 prToken :: Token -> String
 prToken t = case t of
@@ -104,16 +104,16 @@ prToken t = case t of
 -- A modified "posn" wrapper.
 -------------------------------------------------------------------
 
-data Posn = Pn !Int !Int !Int
+data Posn = Pn !Int !Int
       deriving (Eq, Show,Ord)
 
 alexStartPos :: Posn
-alexStartPos = Pn 0 1 1
+alexStartPos = Pn 1 1
 
 alexMove :: Posn -> Char -> Posn
-alexMove (Pn a l c) '\t' = Pn (a+1)  l     (((c+7) `div` 8)*8+1)
-alexMove (Pn a l c) '\n' = Pn (a+1) (l+1)   1
-alexMove (Pn a l c) _    = Pn (a+1)  l     (c+1)
+alexMove (Pn l c) '\t' = Pn l     (((c+7) `div` 8)*8+1)
+alexMove (Pn l c) '\n' = Pn (l+1) 1
+alexMove (Pn l c) _    = Pn l     (c+1)
 
 type Byte = Word8
 
