@@ -60,7 +60,7 @@ import Error
   'unit'        { Token _ (TokenSymbols "Unit") }
   'while'       { Token _ (TokenSymbols "while") }
   'for'         { Token _ (TokenSymbols "for") }
-  'def'         { Token _ (TokenSymbols "for") }
+  'def'         { Token _ (TokenSymbols "def") }
   '{'           { Token _ (TokenSymbols "{") }
   '}'           { Token _ (TokenSymbols "}") }
   '||'          { Token _ (TokenSymbols "||") }
@@ -125,7 +125,8 @@ LExpr :: {AbsNode}
     | BLExpr                        { LExprNode (pos $1) (BasLExpr $1) }
 
 FunCall :: {AbsNode} 
-    : Ident '(' ListRExpr ')'   { let (Token p (TokenIdent v)) = $1 in FunCallNode p (Call (Ident v) $3) }
+    : Ident '(' ListRExpr ')'
+    { let (Token p (TokenIdent v)) = $1 in FunCallNode p (Call (Ident v) $3) }
 
 ListRExpr :: {[AbsNode]} 
           : {- empty -}             { [] }
@@ -133,30 +134,31 @@ ListRExpr :: {[AbsNode]}
           | RExpr ',' ListRExpr     { (:) $1 $3 }
 
 BLExpr :: {AbsNode} 
-    : BLExpr '[' RExpr ']'          { BLExprNode (pos $1) (ArrayEl $1 $3) }
-    | Ident                         { let (Token p (TokenIdent v)) = $1 in BLExprNode p (Id (Ident v)) }
+    : BLExpr '[' RExpr ']'
+    { BLExprNode (pos $1) (ArrayEl $1 $3) }
+    | Ident
+    { let (Token p (TokenIdent v)) = $1 in BLExprNode p (Id (Ident v)) }
 
 Program :: {AbsNode} 
-    : ListDecl                  { ProgramNode (Pn 0 1 1) (Prog (reverse $1)) }
+    : ListDecl                  { ProgramNode (Pn 1 1) (Prog (reverse $1)) }
 
 ListDecl :: {[AbsNode]}  
     : {- empty -}                   { [] }
     | ListDecl Decl                 { flip (:) $1 $2 }
 
 Decl :: {AbsNode} 
-    : ModalityDecl Ident ':' BasicType '=' ComplexRExpr ';'                 { let (Token p (TokenIdent v)) = $2 in DeclNode (pos $1) (DvarBInit $1 (Ident v) $4 $6) }
-    | ModalityDecl Ident ':' TypeSpec '=' ComplexRExpr ';'                  { let (Token p (TokenIdent v)) = $2 in DeclNode (pos $1) (DvarCInit $1 (Ident v) $4 $6) }
-    | 'def' Ident '(' ListParameter ')' ':' BasicType '=' '{' CompStmt ReturnStmt '}'
-    { let (Token p (TokenIdent v)) = $2 in DeclNode (tpos $1) (Dfun (Ident v) $4 $7 $10 $11) }
+    : ModalityDecl Ident ':' BasicType '=' ComplexRExpr ';'                             { let (Token p (TokenIdent v)) = $2 in DeclNode (pos $1) (DvarBInit $1 (Ident v) $4 $6) }
+    | ModalityDecl Ident ':' TypeSpec '=' ComplexRExpr ';'                              { let (Token p (TokenIdent v)) = $2 in DeclNode (pos $1) (DvarCInit $1 (Ident v) $4 $6) }
+    | 'def' Ident '(' ListParameter ')' ':' BasicType '=' '{' CompStmt ReturnStmt '}'   { let (Token p (TokenIdent v)) = $2 in DeclNode (tpos $1) (Dfun (Ident v) $4 $7 $10 $11) }
 
 TypeSpec :: {AbsNode} 
-    : BasicType                                         { TypeSpecNode (pos $1) (BasTyp $1) }
-    | CompoundType                                      { TypeSpecNode (pos $1) (CompType $1) }
+    : BasicType                         { TypeSpecNode (pos $1) (BasTyp $1) }
+    | CompoundType                      { TypeSpecNode (pos $1) (CompType $1) }
 
 CompoundType :: {AbsNode} 
-    : TypeSpec '[' Integer ']'                          { let (Token p (TokenIdent v)) = $3 in CompoundTypeNode (pos $1) (ArrDef $1 (read v::Integer)) }
-    | TypeSpec '[' ']'                                  { CompoundTypeNode (pos $1) (ArrUnDef $1) }
-    | TypeSpec '*'                                      { CompoundTypeNode (pos $1) (Pointer $1) }
+    : TypeSpec '[' Integer ']'          { let (Token p (TokenIdent v)) = $3 in CompoundTypeNode (pos $1) (ArrDef $1 (read v::Integer)) }
+    | TypeSpec '[' ']'                  { CompoundTypeNode (pos $1) (ArrUnDef $1) }
+    | TypeSpec '*'                      { CompoundTypeNode (pos $1) (Pointer $1) }
 
 ComplexRExpr :: {AbsNode} 
     : RExpr                                             { ComplexRExprNode (pos $1) (Simple $1) }
@@ -171,14 +173,14 @@ ListParameter :: {[AbsNode]}
     | Parameter ',' ListParameter                       { (:) $1 $3 }
 
 Parameter :: {AbsNode} 
-    : ModalityParam TypeSpec Ident                     { let (Token p (TokenIdent v)) = $3 in ParameterNode (pos $1) (Param $1 $2 (Ident v)) }
+    : ModalityParam Ident ':' TypeSpec                  { ParameterNode (pos $1) (Param $1 (Ident (prToken $2)) $4) }
 
 ModalityDecl :: {AbsNode}
     : 'val'                                             { ModalityDeclNode (tpos $1) ModalityD_val }
     | 'var'                                             { ModalityDeclNode (tpos $1) ModalityD_var }
 
 ModalityParam :: {AbsNode} 
-    : {- empty -}                                       { ModalityParamNode (Pn 0 0 0) ModalityPEmpty }
+    : {- empty -}                                       { ModalityParamNode (Pn 0 0) ModalityPEmpty }
     | 'val'                                             { ModalityParamNode (tpos $1) ModalityP_val }
     | 'valres'                                          { ModalityParamNode (tpos $1) ModalityP_valres }
     | 'var'                                             { ModalityParamNode (tpos $1) ModalityP_var }
@@ -319,7 +321,7 @@ data ComplexRExpr
     deriving (Eq, Ord, Show)
 
 data Parameter
-    = Param AbsNode AbsNode Ident
+    = Param AbsNode Ident AbsNode
     deriving (Eq, Ord, Show)
 
 data ModalityParam
