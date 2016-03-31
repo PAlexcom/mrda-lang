@@ -209,36 +209,35 @@ checkTypesFakeSafe = Ok checkTypesFake
 checkTypesFake :: Type
 checkTypesFake = TypeError "Type fake"
 
---getFunctionType :: FunCall -> Enviroment -> Err Type
---getFunctionType (Call ident rExprs) env = isFunCallGood (getIdent ident) rExprs env
+getFunctionType :: FunCall -> Enviroment -> Err Type
+getFunctionType (Call ident rExprsNode) env = isFunCallGood (getIdent ident) rExprsNode env
 
+isFuncInEnv :: String -> Enviroment -> Maybe (Type, [Type])
+isFuncInEnv funcName env = case match of
+    Just (tp,params) -> Just (tp,params)
+    Nothing -> case parentEnv of
+        Just parent -> isFuncInEnv funcName parent
+        Nothing -> Nothing
+    where
+        parentEnv = parent env
+        funcsEnv = funcs env
+        match = isFuncInFuncs funcName funcsEnv
 
---isFuncInEnv :: String -> Enviroment -> Maybe (Type, [Type])
---isFuncInEnv funcName env = case match of
---    Just (tp,params) -> Just (tp,params)
---    Nothing -> case parentEnv of
---        Just parent -> isFuncInEnv funcName parent
---        Nothing -> Nothing
---    where
---        parentEnv = parent env
---        funcsEnv = funcs env
---        match = isFuncInFuncs funcName funcsEnv
+isFuncInFuncs :: String -> [EnviromentElement] -> Maybe (Type,[Type])
+isFuncInFuncs funcName [] = Nothing
 
---isFuncInFuncs :: String -> [EnviromentElement] -> Maybe (Type,[Type])
---isFuncInFuncs funcName [] = Nothing
+isFuncInFuncs funcName ((FuncElem ident tp params):funcs) = if funcName == ident
+    then Just (tp, params)
+    else isFuncInFuncs funcName funcs
 
---isFuncInFuncs funcName ((FuncElem ident tp params):funcs) = if funcName == ident
---    then Just (tp, params)
---    else isFuncInFuncs funcName funcs
-
---isFunCallGood :: String -> [RExpr] -> Enviroment -> Err Type
---isFunCallGood funcName rExprs env = 
---    case (isFuncInEnv funcName env) of
---        Just (tp, params) ->
---            case (check_RExprs rExprs params env) of
---                Nothing -> Ok tp
---                Just msg -> Bad ("Error in procedure call: " ++ funcName ++ " error: " ++ msg)
---        Nothing -> Bad ("Function: " ++ funcName ++ " is not declared in the scope")
+isFunCallGood :: String -> [AbsNode] -> Enviroment -> Err Type
+isFunCallGood funcName rExprsNode env = 
+    case (isFuncInEnv funcName env) of
+        Just (tp, params) ->
+            case (get_RExprsNode rExprsNode params env) of
+                Nothing -> Ok tp
+                Just msg -> Bad ("Error in procedure call: " ++ funcName ++ " error: " ++ msg)
+        Nothing -> Bad ("Function: " ++ funcName ++ " is not declared in the scope")
 
 -- Main function, used to type check an Abstract Syntax Tree
 typeChecking :: AbsNode -> Attributes
@@ -381,15 +380,15 @@ check_ModalityDeclNode (ModalityDeclNode posn node) = do
 --    where
 --        funcName = getIdent ident
 
---check_RExprs :: [RExpr] -> [Type] -> Enviroment -> Maybe String
---check_RExprs [] [] _ = Nothing 
---check_RExprs (x:xs) [] env = Just "different function arguments number"
---check_RExprs [] (x:xs) env = Just "different function arguments number"
---check_RExprs (rExpr:rExprs) (param:params) env = case (check_RExpr rExpr env) of
---    Ok tp -> case (checkGoodTypes tp param) of 
---                Ok _    -> check_RExprs rExprs params env
---                Bad _   -> Just "argument types are not equal"
---    Bad msg -> Just msg
+get_RExprsNode :: [AbsNode] -> [Type] -> Enviroment -> Maybe String
+get_RExprsNode [] [] _ = Nothing 
+get_RExprsNode (x:xs) [] env = Just "different function arguments number"
+get_RExprsNode [] (x:xs) env = Just "different function arguments number"
+get_RExprsNode (rExprNode:rExprsNode) (param:params) env = case (get_RExprNode rExprNode env) of
+    Ok tp -> case (checkGoodTypes tp param) of 
+                Ok _    -> get_RExprsNode rExprsNode params env
+                Bad _   -> Just "argument types are not equal"
+    Bad msg -> Just msg
 
 get_ComplexRExpr :: ComplexRExpr -> Enviroment -> Err Type
 get_ComplexRExpr node env = case node of
@@ -413,7 +412,7 @@ get_RExpr node env = case node of
     Not rExpr -> get_RExprNode rExpr env
     Neg rExpr -> get_RExprNode rExpr env
     Ref lExpr -> get_LExprNode lExpr env
-    --FCall funCall -> getFunctionType funCall env
+    FCall funCall -> get_FunCallNode funCall env
     Int integer -> Ok TypeInt
     Char char -> Ok TypeChar
     String string -> Ok TypeString
@@ -459,6 +458,9 @@ check_BLExpr :: BLExpr -> Enviroment -> Err Type
 check_BLExpr node env = case node of
     ArrayEl bLExpr rExpr -> checkTypesFakeSafe -- TODO
     Id ident -> checkIdentType (getIdent ident) env
+
+get_FunCallNode :: AbsNode -> Enviroment -> Err Type
+get_FunCallNode (FunCallNode _ node) env = getFunctionType node env
 
 get_BLExprNode :: AbsNode -> Enviroment -> Err Type
 get_BLExprNode (BLExprNode _ node) env = check_BLExpr node env
