@@ -4,11 +4,6 @@ import Parser
 import Control.Monad.State
 import Error
 
------
------ * Gestire il case di 'if' e 'while'
------ * Passaggio per costante, non può essere modificato il suo valore all'interno del blocco, non può comparire a sinistra di una dichiarazione
------
-
 data Attributes = Attributes {
     isError :: Err String,
     env :: Enviroment,
@@ -83,18 +78,22 @@ pushToEnv envElem = case envElem of
         modify (\attr -> attr {env = currentEnv {vars = envElem : (vars currentEnv)}})
         return ()
 
---pushToEnvFuncParams :: [Parameter] -> State Attributes ()
---pushToEnvFuncParams [] = do
---    return ()
---pushToEnvFuncParams ((Param _ tp ident):params) = do
---    -- TODO quando vengono gestiti gli array creare la struttura dati ArrayElem
---    pushToEnv $ VarElem (getIdent ident) (getTypeSpec tp)
---    return ()
+pushToEnvFuncParams :: [AbsNode] -> State Attributes ()
+pushToEnvFuncParams [] = do
+    return ()
+pushToEnvFuncParams ((ParameterNode _ (Param _ ident tp)):params) = do
+    -- TODO quando vengono gestiti gli array creare la struttura dati ArrayElem
+    pushToEnv $ VarElem (getIdent ident) (getType $ get_TypeSpecNode tp)
+    pushToEnvFuncParams params
+    return ()
 
---serializeEnvParameters :: [Parameter] -> [Type]
---serializeEnvParameters [] = []
---serializeEnvParameters ((Param _ tp ident):params)
---    = (getTypeSpec tp) : serializeEnvParameters params
+serializeEnvParameters :: [AbsNode] -> [Type]
+serializeEnvParameters [] = []
+serializeEnvParameters ((ParameterNode _ (Param _ _ tpNode)):params)
+    = (getType $ get_TypeSpecNode tpNode) : serializeEnvParameters params
+
+getType :: Err Type -> Type
+getType (Ok tp) = tp
 
 getIdent :: Ident -> String
 getIdent (Ident ident) = ident
@@ -251,21 +250,21 @@ typeChecking abstractSyntaxTree = finalAttr
 
 check_Prog :: AbsNode -> State Attributes ()
 check_Prog (ProgramNode posn (Prog decls)) = do
-    check_Decls decls
+    check_DeclsNode decls
     return ()
 
-check_Decls :: [AbsNode] -> State Attributes ()
-check_Decls ((DeclNode pos x):xs) = do
+check_DeclsNode :: [AbsNode] -> State Attributes ()
+check_DeclsNode ((DeclNode pos x):xs) = do
     check_Decl x
     isError <- gets isError
     case isError of
         Ok _ -> do
-            check_Decls xs
+            check_DeclsNode xs
             return()
         Bad _ -> do
             return()
 
-check_Decls [] = do
+check_DeclsNode [] = do
     return ()
 
 check_Decl :: Decl -> State Attributes ()
@@ -289,96 +288,96 @@ check_Decl node = case node of
         return ()
         where
             tp = get_TypeSpecNode typeSpecNode
-    Dfun ident parametersNode basicTypeNode compStmtNode returnStmtNode -> do
-        --pushToEnv $ FuncElem (getIdent ident) (getBasicType basicType) (serializeEnvParameters parameters)
-        --pushToEnvFuncParams parameters
-        --check_CompStmt compStmt
-        --env <- gets env
-        --case (check_ReturnStmt returnStmt env) of 
-        --    Ok tp -> do
-        --        case (checkTypes (getBasicTypeSafe basicType) (Ok tp)) of
-        --            Ok _ -> do
-        --                return()
-        --            Bad msg -> do
-        --                setError $ "In function: " ++ (getIdent ident) ++ " declared type and returned type are not equal"
-        --                return()
-        --    Bad msg -> do
-        --        setError msg
-        --        return()
+    Dfun ident parametersNode basicTypeNode compStmtNode (ReturnStmtNode _ returnStmt) -> do
+        pushToEnv $ FuncElem (getIdent ident) (getType $ get_BasicTypeNode basicTypeNode) (serializeEnvParameters parametersNode)
+        pushToEnvFuncParams parametersNode
+        check_CompStmtNode compStmtNode
+        env <- gets env
+        case (get_ReturnStmt returnStmt env) of 
+            Ok tp -> do
+                case (checkTypes (get_BasicTypeNode basicTypeNode) (Ok tp)) of
+                    Ok _ -> do
+                        return()
+                    Bad msg -> do
+                        setError $ "In function: " ++ (getIdent ident) ++ " declared type and returned type are not equal"
+                        return()
+            Bad msg -> do
+                setError msg
+                return()
         return()
 
 check_ModalityDeclNode :: AbsNode -> State Attributes ()
 check_ModalityDeclNode (ModalityDeclNode posn node) = do
     return ()
 
---check_ReturnStmt :: ReturnStmt -> Enviroment -> Err Type
---check_ReturnStmt node env = case node of
---    RetExpVoid -> Ok TypeUnit
---    RetExp rExpr -> check_RExpr rExpr env
+get_ReturnStmt :: ReturnStmt -> Enviroment -> Err Type
+get_ReturnStmt node env = case node of
+    RetExpVoid -> Ok TypeUnit
+    RetExp rExpr -> get_RExprNode rExpr env
 
---check_CompStmt :: CompStmt -> State Attributes ()
---check_CompStmt (BlockDecl decls stmts) = do
---    check_Decls decls
---    check_Stmts stmts
---    return ()
+check_CompStmtNode :: AbsNode -> State Attributes ()
+check_CompStmtNode (CompStmtNode _ (BlockDecl decls stmts)) = do
+    check_DeclsNode decls
+    check_StmtsNode stmts
+    return ()
 
---check_Stmts :: [Stmt] -> State Attributes ()
---check_Stmts (x:xs) = do
---    check_Stmt x
---    isError <- gets isError
---    case isError of
---        Ok _ -> do
---            check_Stmts xs
---            return()
---        Bad _ -> do
---            return()
---    return ()
+check_StmtsNode :: [AbsNode] -> State Attributes ()
+check_StmtsNode (x:xs) = do
+    check_StmtNode x
+    isError <- gets isError
+    case isError of
+        Ok _ -> do
+            check_StmtsNode xs
+            return()
+        Bad _ -> do
+            return()
+    return ()
 
---check_Stmts [] = do
---    return ()
+check_StmtsNode [] = do
+    return ()
 
---check_Stmt :: Stmt -> State Attributes ()
---check_Stmt node = do
---    env <- gets env
---    case node of
---        Comp compStmt -> do
---            check_CompStmt compStmt
---            return ()
---        ProcCall funCall -> do
---            check_FunCall funCall
---            return ()
---        Jmp jumpStmt -> do
---            return ()
---        Iter iterStmt -> do
---            return ()
---        Sel selectionStmt -> do
---            return ()
---        Assgn lExpr assignment_op rExpr -> do
---            return ()
---        LExprStmt lExpr -> do
---            case tplExpr of
---                Ok tp -> do
---                    return ()
---                Bad msg -> do
---                    setError msg
---                    return ()
---            return ()
---            where
---                tplExpr = check_LExpr lExpr env
---    return ()
+check_StmtNode :: AbsNode -> State Attributes ()
+check_StmtNode (StmtNode _ node) = do
+    env <- gets env
+    case node of
+        Comp compStmt -> do
+            check_CompStmtNode compStmt
+            return ()
+        ProcCall (FunCallNode _ funCall) -> do
+            check_FunCall funCall
+            return ()
+        Jmp jumpStmt -> do
+            return ()
+        Iter iterStmt -> do
+            return ()
+        Sel selectionStmt -> do
+            return ()
+        Assgn lExpr assignment_op rExpr -> do
+            return ()
+        LExprStmt lExpr -> do
+            case tplExpr of
+                Ok tp -> do
+                    return ()
+                Bad msg -> do
+                    setError msg
+                    return ()
+            return ()
+            where
+                tplExpr = get_LExprNode lExpr env
+    return ()
 
---check_FunCall :: FunCall -> State Attributes ()
---check_FunCall (Call ident rExprs) = do
---    env <- gets env
---    case (isFunCallGood funcName rExprs env) of
---        Ok tp -> do
---            return ()
---        Bad msg -> do
---            setError msg
---            return ()
---    return ()
---    where
---        funcName = getIdent ident
+check_FunCall :: FunCall -> State Attributes ()
+check_FunCall (Call ident rExprs) = do
+    env <- gets env
+    case (isFunCallGood funcName rExprs env) of
+        Ok tp -> do
+            return ()
+        Bad msg -> do
+            setError msg
+            return ()
+    return ()
+    where
+        funcName = getIdent ident
 
 get_RExprsNode :: [AbsNode] -> [Type] -> Enviroment -> Maybe String
 get_RExprsNode [] [] _ = Nothing 

@@ -186,7 +186,7 @@ ModalityParam :: {AbsNode}
 CompStmt :: {AbsNode}                       -- FIXME: previous declaration: pos (head $1), returns error because if the list is empty it throws an error, you should write a function 'head' that handles empty lists
     : ListDecl ListStmt                     { CompStmtNode (Pn 0 0) (BlockDecl (reverse $1) (reverse $2)) }
 
-ListStmt :: {[AbsNode]} 
+ListStmt
     : {- empty -}                           { [] }
     | ListStmt Stmt                         { flip (:) $1 $2 }
 
@@ -251,11 +251,11 @@ data AbsNode
 
 newtype Ident = Ident String
     deriving (Eq, Ord, Show, Read)
+
 data Boolean = Boolean_True | Boolean_False
     deriving (Eq, Ord, Show, Read)
 
-data Program =
-    Prog [AbsNode]
+data Program = Prog [AbsNode]
     deriving (Eq, Ord, Show)
 
 data Decl
