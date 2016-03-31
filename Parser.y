@@ -134,7 +134,7 @@ ListRExpr :: {[AbsNode]}
     | RExpr ',' ListRExpr           { (:) $1 $3 }
 
 BLExpr :: {AbsNode} 
-    : BLExpr '[' RExpr ']'          { BLExprNode (pos $1) (ArrayEl $1 $3) }
+    : BLExpr '(' RExpr ')'          { BLExprNode (pos $1) (ArrayEl $1 $3) }
     | Ident                         { BLExprNode (tokenPosn $1) (Id (Ident (prToken $1))) }
 
 Program :: {AbsNode} 
