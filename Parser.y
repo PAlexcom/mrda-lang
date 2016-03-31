@@ -254,6 +254,16 @@ newtype Ident = Ident String
 data Boolean = Boolean_True | Boolean_False
     deriving (Eq, Ord, Show, Read)
 
+data Program =
+    Prog [AbsNode]
+    deriving (Eq, Ord, Show)
+
+data Decl
+    = DvarBInit AbsNode Ident AbsNode AbsNode
+    | DvarCInit AbsNode Ident AbsNode AbsNode
+    | Dfun Ident [AbsNode] AbsNode AbsNode AbsNode
+    deriving (Eq, Ord, Show)
+
 data RExpr
     = OpRelation AbsNode AbsNode String
     | OpAritm AbsNode AbsNode String
@@ -286,16 +296,6 @@ data LExpr
 data BLExpr
     = ArrayEl AbsNode AbsNode
     | Id Ident
-    deriving (Eq, Ord, Show)
-
-data Program =
-    Prog [AbsNode]
-    deriving (Eq, Ord, Show)
-
-data Decl
-    = DvarBInit AbsNode Ident AbsNode AbsNode
-    | DvarCInit AbsNode Ident AbsNode AbsNode
-    | Dfun Ident [AbsNode] AbsNode AbsNode AbsNode
     deriving (Eq, Ord, Show)
 
 data TypeSpec
