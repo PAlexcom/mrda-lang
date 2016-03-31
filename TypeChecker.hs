@@ -1,6 +1,7 @@
 module TypeChecker where
 
 import Parser
+import Lexer
 import Control.Monad.State
 import Error
 
@@ -22,7 +23,7 @@ data Enviroment
     deriving (Show)
 
 data EnviromentElement
-    =  FuncElem {ident :: String, tp :: Type, params :: [Type]} -- TODO Bisogna modificare per aggiungere la modalità
+    = FuncElem {ident :: String, tp :: Type, params :: [Type]} -- TODO Bisogna modificare per aggiungere la modalità
     | VarElem {ident :: String, tp :: Type} -- TODO Bisogna modificare per aggiungere la modalità
     | ArrayElem {ident :: String, tp :: Type, dim :: Int} -- TODO Bisogna modificare per aggiungere la modalità
     | PointerElem {ident :: String, tp :: Type} -- TODO Bisogna modificare per aggiungere la modalità
@@ -41,7 +42,7 @@ data Type
     deriving (Eq, Show, Read)
 
 ------------------------------------------------------------
---------- Utilities ----------------------------------------
+--------- Enviroment Utilities -----------------------------
 ------------------------------------------------------------
 
 defaultAttributes = Attributes (Ok "") (Env [] [] [] [] Nothing) 0 0
@@ -87,6 +88,10 @@ pushToEnvFuncParams ((ParameterNode _ (Param _ ident tp)):params) = do
     pushToEnvFuncParams params
     return ()
 
+------------------------------------------------------------
+--------- Utilities ----------------------------------------
+------------------------------------------------------------
+
 serializeEnvParameters :: [AbsNode] -> [Type]
 serializeEnvParameters [] = []
 serializeEnvParameters ((ParameterNode _ (Param _ _ tpNode)):params)
@@ -121,10 +126,6 @@ getCompoundTypeSafe node = case node of
     ArrUnDef typeSpec -> checkTypesFakeSafe -- TODO
     Pointer typeSpec -> checkTypesFakeSafe -- TODO
 
-------------------------------------------------------------
---------- Type Checker -------------------------------------
-------------------------------------------------------------
-
 type2string :: Type -> String
 type2string tp = case tp of
     TypeInt             -> "Int" 
@@ -137,15 +138,25 @@ type2string tp = case tp of
     TypePointer tp      -> "Pointer"
     TypeError msg       -> "Error"
 
+------------------------------------------------------------
+--------- Type Checker -------------------------------------
+------------------------------------------------------------
+
+-- Main function, used to type check an Abstract Syntax Tree
+typeChecking :: AbsNode -> Attributes
+typeChecking abstractSyntaxTree = finalAttr
+    where 
+        finalAttr = execState (check_Prog abstractSyntaxTree) defaultAttributes
+
 checkTypes :: Err Type -> Err Type -> Err Type
-checkTypes (Ok t1) (Ok t2)  = checkGoodTypes t1 t2
+checkTypes (Ok t1) (Ok t2)  = checkTypesRaw t1 t2
 checkTypes (Bad msg) _      = Bad msg
 checkTypes _ (Bad msg)      = Bad msg
 
-checkGoodTypes :: Type -> Type -> Err Type
-checkGoodTypes t1 t2 
+checkTypesRaw :: Type -> Type -> Err Type
+checkTypesRaw t1 t2 
     | t1 == t2  = Ok t1
-    | otherwise =  getMaxType t1 t2
+    | otherwise = getMaxType t1 t2
 
 getMaxType :: Type -> Type -> Err Type
 getMaxType TypeInt TypeFloat = Ok TypeFloat
@@ -154,27 +165,24 @@ getMaxType TypeChar TypeString = Ok TypeString
 getMaxType TypeString TypeChar = Ok TypeString
 getMaxType _ _ = Bad "i tipi non sono compatibili"
 
-
 checkBoolTypes :: Err Type -> Err Type -> Err Type
-checkBoolTypes first second = case check of
+checkBoolTypes first second = case (checkTypes first second) of
     Ok tp -> if (tp == TypeBoolean)
         then Ok tp
         else Bad ("error type: must be of type 'bool'")
     Bad msg -> Bad msg
-    where
-        check = checkTypes first second
 
 checkAritmTypes :: Err Type -> Err Type -> Err Type
-checkAritmTypes first second = case check of
-    Ok tp -> if (tp == TypeInt || tp == TypeFloat)
-        then Ok tp
-        else Bad ("error type: must be of type 'int'")
-    Bad msg -> Bad msg
-    where
-        check = checkTypes first second
+checkAritmTypes first second = case (checkAritmType first) of
+    Ok tp -> case (checkAritmType second) of
+        Ok tp -> Ok tp
+        Bad msg -> Bad (msg ++ " but found: " ++ (type2string $ getType second))
+    Bad msg -> Bad (msg ++ " but found: " ++ (type2string $ getType first))
 
-checkAritmType :: Err Type -> Bool
-checkAritmType tp = (tp == (Ok TypeInt)) || (tp == (Ok TypeFloat)) 
+checkAritmType :: Err Type -> Err Type
+checkAritmType tp = if (tp == (Ok TypeInt)) || (tp == (Ok TypeFloat)) 
+    then tp
+    else Bad "Incorect type declaration, must be 'Int' or 'Float'"
 
 checkRelTypes :: Err Type -> Err Type -> Err Type
 checkRelTypes first second = checkAritmTypes first second
@@ -238,11 +246,8 @@ isFunCallGood funcName rExprsNode env =
                 Just msg -> Bad ("Error in procedure call: " ++ funcName ++ " error: " ++ msg)
         Nothing -> Bad ("Function: " ++ funcName ++ " is not declared in the scope")
 
--- Main function, used to type check an Abstract Syntax Tree
-typeChecking :: AbsNode -> Attributes
-typeChecking abstractSyntaxTree = finalAttr
-    where 
-        finalAttr = execState (check_Prog abstractSyntaxTree) defaultAttributes
+getNodeError :: AbsNode -> String
+getNodeError node = let (Pn line column) = (pos node) in ("line: " ++ (show line) ++ " column: " ++ (show column))
 
 ------------------------------------------------------------
 --------- Parser ABS ---------------------------------------
@@ -304,7 +309,6 @@ check_Decl node = case node of
             Bad msg -> do
                 setError msg
                 return()
-        return()
 
 check_ModalityDeclNode :: AbsNode -> State Attributes ()
 check_ModalityDeclNode (ModalityDeclNode posn node) = do
@@ -331,7 +335,6 @@ check_StmtsNode (x:xs) = do
             return()
         Bad _ -> do
             return()
-    return ()
 
 check_StmtsNode [] = do
     return ()
@@ -361,10 +364,8 @@ check_StmtNode (StmtNode _ node) = do
                 Bad msg -> do
                     setError msg
                     return ()
-            return ()
             where
                 tplExpr = get_LExprNode lExpr env
-    return ()
 
 check_FunCall :: FunCall -> State Attributes ()
 check_FunCall (Call ident rExprs) = do
@@ -375,7 +376,6 @@ check_FunCall (Call ident rExprs) = do
         Bad msg -> do
             setError msg
             return ()
-    return ()
     where
         funcName = getIdent ident
 
@@ -384,9 +384,9 @@ get_RExprsNode [] [] _ = Nothing
 get_RExprsNode (x:xs) [] env = Just "different function arguments number"
 get_RExprsNode [] (x:xs) env = Just "different function arguments number"
 get_RExprsNode (rExprNode:rExprsNode) (param:params) env = case (get_RExprNode rExprNode env) of
-    Ok tp -> case (checkGoodTypes tp param) of 
-                Ok _    -> get_RExprsNode rExprsNode params env
-                Bad _   -> Just "argument types are not equal"
+    Ok tp -> case (checkTypesRaw tp param) of 
+        Ok _ -> get_RExprsNode rExprsNode params env
+        Bad _ -> Just "argument types are not equal"
     Bad msg -> Just msg
 
 get_ComplexRExpr :: ComplexRExpr -> Enviroment -> Err Type
@@ -422,53 +422,47 @@ get_RExpr node env = case node of
 get_LExpr :: LExpr -> Enviroment -> Err Type
 get_LExpr node env = case node of
     Deref rExpr -> case tpRExpr of
-        Ok tp -> if checkAritmType tpRExpr
-            then Ok tp
-            else Bad ("Deref expressions must be of type int or float, but: " ++ (type2string tp) ++ " found")
+        Ok tp -> checkAritmType tpRExpr
         Bad msg -> Bad msg
         where tpRExpr = get_RExprNode rExpr env
     PreInc lExpr -> case tpLExpr of
-        Ok tp -> if checkAritmType tpLExpr
-            then Ok tp
-            else Bad ("PreInc expressions must be of type int or float, but: " ++ (type2string tp) ++ " found")
+        Ok tp -> checkAritmType tpLExpr
         Bad msg -> Bad msg
         where tpLExpr = get_LExprNode lExpr env
     PreDecr lExpr -> case tpLExpr of
-        Ok tp -> if checkAritmType tpLExpr
-            then Ok tp
-            else Bad ("PreInc expressions must be of type int or float, but: " ++ (type2string tp) ++ " found")
+        Ok tp -> checkAritmType tpLExpr
         Bad msg -> Bad msg
         where tpLExpr = get_LExprNode lExpr env
     PostInc lExpr -> case tpLExpr of
-        Ok tp -> if checkAritmType tpLExpr
-            then Ok tp
-            else Bad ("PosInc expressions must be of type int or float, but: " ++ (type2string tp) ++ " found")
+        Ok tp -> checkAritmType tpLExpr
         Bad msg -> Bad msg
         where tpLExpr = get_LExprNode lExpr env
     PostDecr lExpr -> case tpLExpr of
-        Ok tp -> if checkAritmType tpLExpr
-            then Ok tp
-            else Bad ("PostDecr expressions must be of type int or float, but: " ++ (type2string tp) ++ " found")
+        Ok tp -> checkAritmType tpLExpr
         Bad msg -> Bad msg
         where tpLExpr = get_LExprNode lExpr env
     BasLExpr bLExpr -> get_BLExprNode bLExpr env
 
-check_BLExpr :: BLExpr -> Enviroment -> Err Type
-check_BLExpr node env = case node of
+get_BLExpr :: BLExpr -> Enviroment -> Err Type
+get_BLExpr node env = case node of
     ArrayEl bLExpr rExpr -> checkTypesFakeSafe -- TODO
     Id ident -> checkIdentType (getIdent ident) env
+
+------------------------------------------------------------
+--------- Parser AbsNode -----------------------------------
+------------------------------------------------------------
 
 get_FunCallNode :: AbsNode -> Enviroment -> Err Type
 get_FunCallNode (FunCallNode _ node) env = getFunctionType node env
 
 get_BLExprNode :: AbsNode -> Enviroment -> Err Type
-get_BLExprNode (BLExprNode _ node) env = check_BLExpr node env
+get_BLExprNode (BLExprNode _ node) env = get_BLExpr node env
 
 get_LExprNode :: AbsNode -> Enviroment -> Err Type
 get_LExprNode (LExprNode _ node) = get_LExpr node
 
 get_BasicTypeNode :: AbsNode -> Err Type
-get_BasicTypeNode (BasicTypeNode posn node) = getBasicTypeSafe node
+get_BasicTypeNode (BasicTypeNode _ node) = getBasicTypeSafe node
 
 get_TypeSpecNode :: AbsNode -> Err Type
 get_TypeSpecNode (TypeSpecNode _ node) = getTypeSpecSafe node
