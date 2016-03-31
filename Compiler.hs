@@ -38,7 +38,7 @@ compile fileName text = do
             --        putStrLn $ prettyPrintTAC $ tac tacAttr
             --        where
             --            tacAttr = tacGenerator abst
-                Bad msg -> putStrLn ("-----------------------\n!!! Error: " ++ msg ++ " \n-----------------------")
+                Bad msg -> putStrLn ("-----------------------\n!!! Error => " ++ msg ++ " \n-----------------------")
             where
                 typeCheckingReport = typeChecking abst
                 isTypeCheckOk = isError typeCheckingReport

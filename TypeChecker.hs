@@ -136,7 +136,7 @@ type2string tp = case tp of
     TypeUnit            -> "Unit"
     TypeArray tp int    -> "Array"
     TypePointer tp      -> "Pointer"
-    TypeError msg       -> "Error"
+    TypeError msg       -> "Error" -- TODO remove me and all my dependencies, I do not need for anything
 
 ------------------------------------------------------------
 --------- Type Checker -------------------------------------
@@ -246,8 +246,8 @@ isFunCallGood funcName rExprsNode env =
                 Just msg -> Bad ("Error in procedure call: " ++ funcName ++ " error: " ++ msg)
         Nothing -> Bad ("Function: " ++ funcName ++ " is not declared in the scope")
 
-getNodeError :: AbsNode -> String
-getNodeError node = let (Pn line column) = (pos node) in ("line: " ++ (show line) ++ " column: " ++ (show column))
+getNodeInfo :: AbsNode -> String
+getNodeInfo node = let (Pn line column) = (pos node) in ("(line: " ++ (show line) ++ " column: " ++ (show column) ++ ")")
 
 ------------------------------------------------------------
 --------- Parser ABS ---------------------------------------
@@ -279,7 +279,7 @@ check_Decl node = case node of
     DvarBInit modalityDeclNode ident basicTypeNode complexRExprNode -> do
         env <- gets env
         case (checkTypes tp (get_ComplexRExprNode complexRExprNode env)) of
-            Bad msg -> setError msg
+            Bad msg -> setError $ getNodeInfo complexRExprNode ++ msg
             Ok tp1 -> pushToEnv (VarElem (getIdent ident) tp1)
         return ()
         where
@@ -288,26 +288,26 @@ check_Decl node = case node of
     DvarCInit modalityDeclNode ident typeSpecNode complexRExprNode -> do
         env <- gets env
         case (checkTypes tp (get_ComplexRExprNode complexRExprNode env)) of
-            Bad msg -> setError msg
+            Bad msg -> setError $ getNodeInfo complexRExprNode ++ msg
             Ok tp1 -> pushToEnv (VarElem (getIdent ident) tp1)
         return ()
         where
             tp = get_TypeSpecNode typeSpecNode
-    Dfun ident parametersNode basicTypeNode compStmtNode (ReturnStmtNode _ returnStmt) -> do
+    Dfun ident parametersNode basicTypeNode compStmtNode returnStmtNode -> do
         pushToEnv $ FuncElem (getIdent ident) (getType $ get_BasicTypeNode basicTypeNode) (serializeEnvParameters parametersNode)
         pushToEnvFuncParams parametersNode
         check_CompStmtNode compStmtNode
         env <- gets env
-        case (get_ReturnStmt returnStmt env) of 
+        case (let (ReturnStmtNode pos returnStmt) = returnStmtNode in (get_ReturnStmt returnStmt env)) of 
             Ok tp -> do
                 case (checkTypes (get_BasicTypeNode basicTypeNode) (Ok tp)) of
                     Ok _ -> do
                         return()
                     Bad msg -> do
-                        setError $ "In function: " ++ (getIdent ident) ++ " declared type and returned type are not equal"
+                        setError $ (getNodeInfo basicTypeNode) ++ "In function: " ++ (getIdent ident) ++ " declared type and returned type are not equal " ++ msg
                         return()
             Bad msg -> do
-                setError msg
+                setError $ (getNodeInfo returnStmtNode) ++ msg
                 return()
 
 check_ModalityDeclNode :: AbsNode -> State Attributes ()
@@ -362,7 +362,7 @@ check_StmtNode (StmtNode _ node) = do
                 Ok tp -> do
                     return ()
                 Bad msg -> do
-                    setError msg
+                    setError $ (getNodeInfo lExpr) ++ msg
                     return ()
             where
                 tplExpr = get_LExprNode lExpr env
