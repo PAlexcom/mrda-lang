@@ -5,15 +5,15 @@ var y: Int = 5 * 4;
 var z: Int = 5 / 4;
 
 // // Compound Declaration
-// var s: Array[Char](4) = Array('a', 'b', 'c', 'd');
-// var a: Boolean = True;
+var s: Array[Array[Char](4)](2) = Array(Array('a', 'b', 'c', 'd'), Array('a', 'b', 'c', 'd'));
+var a: Boolean = True;
 
 def proc(valres c: Int, b: Boolean): Int = {
     return (c);
 }
 
 // Function Declaration
-def func(a: Int, b: Boolean, d: Char, n: Float, l: Boolean): Int = {
+def func(a: Int, b: Boolean, d: Char, n: Float, l: Boolean, m: Array[Char](5)): Int = {
     // Basic Declaration
     var counter: Int = a;
     var z: Int = proc(counter, b);

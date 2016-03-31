@@ -86,6 +86,7 @@ BasicType :: {AbsNode}
     | 'float'                       { BasicTypeNode (tpos $1) (BType "Float") }
     | 'int'                         { BasicTypeNode (tpos $1) (BType "Int") }
     | 'unit'                        { BasicTypeNode (tpos $1) (BType "Unit") }
+    | 'string'                      { BasicTypeNode (tpos $1) (BType "String") }
 
 RExpr :: {AbsNode} 
     : RExpr '||' RExpr              { RExprNode (pos $1) (OpBoolean $1 $3 "||") }
@@ -153,13 +154,13 @@ TypeSpec :: {AbsNode}
     | CompoundType                          { TypeSpecNode (pos $1) (CompType $1) }
 
 CompoundType :: {AbsNode} 
-    : TypeSpec '[' Integer ']'              { CompoundTypeNode (pos $1) (ArrDef $1 (read (prToken $3)::Integer)) }
-    | TypeSpec '[' ']'                      { CompoundTypeNode (pos $1) (ArrUnDef $1) }
-    | TypeSpec '*'                          { CompoundTypeNode (pos $1) (Pointer $1) }
+    : 'array' '[' TypeSpec ']' '(' Integer ')'      { CompoundTypeNode (tpos $1) (ArrDef $3 (read (prToken $6)::Integer)) }
+    | 'array' '[' TypeSpec ']'                      { CompoundTypeNode (tpos $1) (ArrUnDef $3) }
+    | '*' TypeSpec                                  { CompoundTypeNode (tpos $1) (Pointer $2) }
 
 ComplexRExpr :: {AbsNode} 
     : RExpr                                 { ComplexRExprNode (pos $1) (Simple $1) }
-    | '[' ListComplexRExpr ']'              { ComplexRExprNode (tpos $1) (Array $2) }
+    | 'array' '(' ListComplexRExpr ')'      { ComplexRExprNode (tpos $1) (Array $3) }
 
 ListComplexRExpr : ComplexRExpr             { (:[]) $1 }
     | ComplexRExpr ',' ListComplexRExpr     { (:) $1 $3 }

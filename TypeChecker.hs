@@ -1,6 +1,6 @@
-module MRDATypeChecker where
+module TypeChecker where
 
-import MRDAParser
+import Parser
 import Control.Monad.State
 import Error
 
@@ -93,7 +93,6 @@ pushToEnvFuncParams ((Param _ tp ident):params) = do
     pushToEnv $ VarElem (getIdent ident) (getTypeSpec tp)
     return ()
 
---serializeEnvParameters :: [Parameter] -> [String]
 serializeEnvParameters :: [Parameter] -> [Type]
 serializeEnvParameters [] = []
 serializeEnvParameters ((Param _ tp ident):params)
@@ -102,8 +101,6 @@ serializeEnvParameters ((Param _ tp ident):params)
 getIdent :: Ident -> String
 getIdent (Ident ident) = ident
 
---getBasicType :: BasicType -> String
---getBasicType (BType tp) = tp
 getBasicType :: BasicType -> Type
 getBasicType (BType tp) = case tp of 
     "bool"  -> TypeBool
@@ -116,7 +113,6 @@ getBasicType (BType tp) = case tp of
 getBasicTypeSafe :: BasicType -> Err Type
 getBasicTypeSafe tp = Ok (getBasicType tp)
 
---getTypeSpec :: TypeSpec -> String
 getTypeSpec :: TypeSpec -> Type
 getTypeSpec node = case node of
     BasTyp basicType -> getBasicType basicType
@@ -125,7 +121,6 @@ getTypeSpec node = case node of
 getTypeSpecSafe :: TypeSpec -> Err Type
 getTypeSpecSafe node = Ok (getTypeSpec node)
 
---getCompoundType :: CompoundType -> String
 getCompoundType :: CompoundType -> Type
 getCompoundType node = case node of
     ArrDef typeSpec integer -> checkTypesFake -- TODO
@@ -253,13 +248,13 @@ isFunCallGood funcName rExprs env =
 ------------------------------------------------------------
 --------- Parser ABS ---------------------------------------
 ------------------------------------------------------------
-typeChecking :: Program -> Attributes
+typeChecking :: ProgramNode -> Attributes
 typeChecking abstractSyntaxTree = finalAttr
     where 
         finalAttr = execState (check_Prog abstractSyntaxTree) defaultAttributes
 
-check_Prog :: Program -> State Attributes ()
-check_Prog (Prog decls) = do
+check_Prog :: ProgramNode -> State Attributes ()
+check_Prog (ProgramNode posn (Prog decls)) = do
     check_Decls decls
     return ()
 
@@ -387,27 +382,19 @@ check_RExprs (rExpr:rExprs) (param:params) env = case (check_RExpr rExpr env) of
                 Bad _   -> Just "argument types are not equal"
     Bad msg -> Just msg
 
-check_VarDeclInits :: Err Type -> [VarDeclInit] -> State Attributes ()
-check_VarDeclInits tp [] = do
-    return ()
 
-check_VarDeclInits tp (x:xs) = do
-    check_VarDeclInit tp x
-    check_VarDeclInits tp xs
-    return ()
-
-check_VarDeclInit :: Err Type -> VarDeclInit -> State Attributes ()
-check_VarDeclInit tp node = do 
-    env <- gets env
-    case node of
-        VarDeclIn ident complexRExpr -> do
-            case (checkTypes tp tpRexpr) of
-                Bad msg -> setError msg
-                Ok tp1 -> pushToEnv (VarElem (getIdent ident) tp1)
-            return ()
-            where
-            tpRexpr = check_ComplexRExpr complexRExpr env
-    return ()
+--check_VarDeclInit :: Err Type -> VarDeclInit -> State Attributes ()
+--check_VarDeclInit tp node = do 
+--    env <- gets env
+--    case node of
+--        VarDeclIn ident complexRExpr -> do
+--            case (checkTypes tp tpRexpr) of
+--                Bad msg -> setError msg
+--                Ok tp1 -> pushToEnv (VarElem (getIdent ident) tp1)
+--            return ()
+--            where
+--            tpRexpr = check_ComplexRExpr complexRExpr env
+--    return ()
 
 
 check_ComplexRExpr :: ComplexRExpr -> Enviroment -> Err Type

@@ -7,8 +7,8 @@ import System.Exit ( exitFailure, exitSuccess )
 import Lexer
 import Parser
 import Error
---import CodeGenerator
 --import TypeChecker
+--import CodeGenerator
 --import PrettyPrinterTAC
 --import PrettyPrinterABS
 
