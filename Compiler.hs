@@ -9,8 +9,8 @@ import Parser
 import Error
 import TypeChecker
 import CodeGenerator
+import PrettyPrinterABS
 --import PrettyPrinterTAC
---import PrettyPrinterABS
 
 compileFile fileName = putStrLn fileName >> readFile fileName >>= compile fileName
 compile fileName text = do
@@ -19,12 +19,12 @@ compile fileName text = do
     putStrLn "-----------------------\n Abstract Syntax Tree \n-----------------------"
     case abstractSyntaxTree of
         Bad msg -> do
-            putStrLn ("-----------------------\n !!! Error: " ++ msg ++ " \n-----------------------")
+            putStrLn ("-----------------------\n !!! Error => " ++ msg ++ " \n-----------------------")
             return ()
         Ok abst -> do
             print abst
-            --putStrLn "-----------------------\n ABS Pretty Printer \n-----------------------"
-            --putStrLn $ prettyPrintABS abst
+            putStrLn "-----------------------\n ABS Pretty Printer \n-----------------------"
+            putStrLn $ prettyPrintABS abst
             putStrLn "-----------------------\n Type Checking \n-----------------------"
             print typeCheckingReport
             case isTypeCheckOk of
