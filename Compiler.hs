@@ -8,7 +8,7 @@ import Lexer
 import Parser
 import Error
 import TypeChecker
---import CodeGenerator
+import CodeGenerator
 --import PrettyPrinterTAC
 --import PrettyPrinterABS
 
@@ -30,14 +30,14 @@ compile fileName text = do
             case isTypeCheckOk of
                 Ok _ -> do
                     putStrLn "-----------------------\n OK | Type Checking \n-----------------------"
-            --        putStrLn "-----------------------\n TAC \n-----------------------"
-            --        print tacAttr
-            --        putStrLn "-----------------------\n TAC Source Code \n-----------------------"
-            --        putStrLn $ code tacAttr
+                    putStrLn "-----------------------\n TAC \n-----------------------"
+                    print tacAttr
+                    putStrLn "-----------------------\n TAC Source Code \n-----------------------"
+                    putStrLn $ code tacAttr
             --        putStrLn "-----------------------\n TAC Pretty Printer \n-----------------------"
             --        putStrLn $ prettyPrintTAC $ tac tacAttr
-            --        where
-            --            tacAttr = tacGenerator abst
+                    where
+                        tacAttr = tacGenerator abst
                 Bad msg -> putStrLn ("-----------------------\n!!! Error => " ++ msg ++ " \n-----------------------")
             where
                 typeCheckingReport = typeChecking abst
