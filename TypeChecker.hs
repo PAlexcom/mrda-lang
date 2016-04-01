@@ -123,7 +123,6 @@ getTypeSpecSafe node = case node of
 getCompoundTypeSafe :: CompoundType -> Err Type
 getCompoundTypeSafe node = case node of
     ArrDef typeSpec integer -> checkTypesFakeSafe -- TODO
-    ArrUnDef typeSpec -> checkTypesFakeSafe -- TODO
     Pointer typeSpec -> checkTypesFakeSafe -- TODO
 
 type2string :: Type -> String
@@ -425,19 +424,11 @@ get_LExpr node env = case node of
         Ok tp -> checkAritmType tpRExpr
         Bad msg -> Bad msg
         where tpRExpr = get_RExprNode rExpr env
-    PreInc lExpr -> case tpLExpr of
+    PreIncrDecr lExpr _ -> case tpLExpr of
         Ok tp -> checkAritmType tpLExpr
         Bad msg -> Bad msg
         where tpLExpr = get_LExprNode lExpr env
-    PreDecr lExpr -> case tpLExpr of
-        Ok tp -> checkAritmType tpLExpr
-        Bad msg -> Bad msg
-        where tpLExpr = get_LExprNode lExpr env
-    PostInc lExpr -> case tpLExpr of
-        Ok tp -> checkAritmType tpLExpr
-        Bad msg -> Bad msg
-        where tpLExpr = get_LExprNode lExpr env
-    PostDecr lExpr -> case tpLExpr of
+    PostIncrDecr lExpr _ -> case tpLExpr of
         Ok tp -> checkAritmType tpLExpr
         Bad msg -> Bad msg
         where tpLExpr = get_LExprNode lExpr env
