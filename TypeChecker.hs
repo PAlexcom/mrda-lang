@@ -1,13 +1,9 @@
 module TypeChecker where
 
 import Parser
+import Lexer
 import Control.Monad.State
 import Error
-
------
------ * Gestire il case di 'if' e 'while'
------ * Passaggio per costante, non può essere modificato il suo valore all'interno del blocco, non può comparire a sinistra di una dichiarazione
------
 
 data Attributes = Attributes {
     isError :: Err String,
@@ -27,28 +23,26 @@ data Enviroment
     deriving (Show)
 
 data EnviromentElement
-    =  FuncElem {ident :: String, tp :: Type, params :: [Type]} -- TODO Bisogna modificare per aggiungere la modalità
-    | VarElem {ident :: String, tp :: Type}
-    | ArrayElem {ident :: String, tp :: Type, dim :: Int}
-    | PointerElem {ident :: String, tp :: Type}
+    = FuncElem {ident :: String, tp :: Type, params :: [Type]} -- TODO Bisogna modificare per aggiungere la modalità
+    | VarElem {ident :: String, tp :: Type} -- TODO Bisogna modificare per aggiungere la modalità
+    | ArrayElem {ident :: String, tp :: Type, dim :: Int} -- TODO Bisogna modificare per aggiungere la modalità
+    | PointerElem {ident :: String, tp :: Type} -- TODO Bisogna modificare per aggiungere la modalità
     deriving (Show, Eq)
-
-
 
 data Type 
     = TypeInt
     | TypeChar
-    | TypeBool
+    | TypeBoolean
     | TypeFloat
     | TypeString
-    | TypeVoid
+    | TypeUnit
     | TypeArray Type Int
     | TypePointer Type
     | TypeError String
     deriving (Eq, Show, Read)
 
 ------------------------------------------------------------
---------- Utilities ----------------------------------------
+--------- Enviroment Utilities -----------------------------
 ------------------------------------------------------------
 
 defaultAttributes = Attributes (Ok "") (Env [] [] [] [] Nothing) 0 0
@@ -85,73 +79,84 @@ pushToEnv envElem = case envElem of
         modify (\attr -> attr {env = currentEnv {vars = envElem : (vars currentEnv)}})
         return ()
 
-pushToEnvFuncParams :: [Parameter] -> State Attributes ()
+pushToEnvFuncParams :: [AbsNode] -> State Attributes ()
 pushToEnvFuncParams [] = do
     return ()
-pushToEnvFuncParams ((Param _ tp ident):params) = do
+pushToEnvFuncParams ((ParameterNode _ (Param _ ident tp)):params) = do
     -- TODO quando vengono gestiti gli array creare la struttura dati ArrayElem
-    pushToEnv $ VarElem (getIdent ident) (getTypeSpec tp)
+    pushToEnv $ VarElem (getIdent ident) (getType $ get_TypeSpecNode tp)
+    pushToEnvFuncParams params
     return ()
 
-serializeEnvParameters :: [Parameter] -> [Type]
+------------------------------------------------------------
+--------- Utilities ----------------------------------------
+------------------------------------------------------------
+
+serializeEnvParameters :: [AbsNode] -> [Type]
 serializeEnvParameters [] = []
-serializeEnvParameters ((Param _ tp ident):params)
-    = (getTypeSpec tp) : serializeEnvParameters params
+serializeEnvParameters ((ParameterNode _ (Param _ _ tpNode)):params)
+    = (getType $ get_TypeSpecNode tpNode) : serializeEnvParameters params
+
+getType :: Err Type -> Type
+getType (Ok tp) = tp
 
 getIdent :: Ident -> String
 getIdent (Ident ident) = ident
 
 getBasicType :: BasicType -> Type
 getBasicType (BType tp) = case tp of 
-    "bool"  -> TypeBool
-    "int"   -> TypeInt
-    "char"  -> TypeChar
-    "float" -> TypeFloat
-    "string"-> TypeString
-    "void"  -> TypeVoid
+    "Boolean" -> TypeBoolean
+    "Int"     -> TypeInt
+    "Char"    -> TypeChar
+    "Float"   -> TypeFloat
+    "String"  -> TypeString
+    "Unit"    -> TypeUnit
 
 getBasicTypeSafe :: BasicType -> Err Type
 getBasicTypeSafe tp = Ok (getBasicType tp)
 
-getTypeSpec :: TypeSpec -> Type
-getTypeSpec node = case node of
-    BasTyp basicType -> getBasicType basicType
-    CompType compoundType -> getCompoundType compoundType
-
 getTypeSpecSafe :: TypeSpec -> Err Type
-getTypeSpecSafe node = Ok (getTypeSpec node)
+getTypeSpecSafe node = case node of
+    BasTyp node -> get_BasicTypeNode node
+    CompType node -> get_CompoundTypeNode node
 
-getCompoundType :: CompoundType -> Type
-getCompoundType node = case node of
-    ArrDef typeSpec integer -> checkTypesFake -- TODO
-    ArrUnDef typeSpec -> checkTypesFake -- TODO
-    Pointer typeSpec -> checkTypesFake -- TODO
-
-------------------------------------------------------------
---------- Type Checker -------------------------------------
-------------------------------------------------------------
+getCompoundTypeSafe :: CompoundType -> Err Type
+getCompoundTypeSafe node = case node of
+    ArrDef typeSpec integer -> checkTypesFakeSafe -- TODO
+    ArrUnDef typeSpec -> checkTypesFakeSafe -- TODO
+    Pointer typeSpec -> checkTypesFakeSafe -- TODO
 
 type2string :: Type -> String
 type2string tp = case tp of
     TypeInt             -> "Int" 
     TypeChar            -> "Char"
-    TypeBool            -> "Bool"
+    TypeBoolean         -> "Boolean"
     TypeFloat           -> "Float"
     TypeString          -> "String"
-    TypeVoid            -> "Void"
+    TypeUnit            -> "Unit"
     TypeArray tp int    -> "Array"
     TypePointer tp      -> "Pointer"
-    TypeError msg       -> "Error"
+    TypeError msg       -> "Error" -- TODO remove me and all my dependencies, I do not need for anything
+
+------------------------------------------------------------
+--------- Type Checker -------------------------------------
+------------------------------------------------------------
+
+-- Main function, used to type check an Abstract Syntax Tree
+typeChecking :: AbsNode -> Attributes
+typeChecking abstractSyntaxTree = finalAttr
+    where 
+        finalAttr = execState (check_Prog abstractSyntaxTree) defaultAttributes
 
 checkTypes :: Err Type -> Err Type -> Err Type
-checkTypes (Ok t1) (Ok t2)  = checkGoodTypes t1 t2
+checkTypes (Ok t1) (Ok t2)  = checkTypesRaw t1 t2
 checkTypes (Bad msg) _      = Bad msg
 checkTypes _ (Bad msg)      = Bad msg
 
-checkGoodTypes :: Type -> Type -> Err Type
-checkGoodTypes t1 t2 
+checkTypesRaw :: Type -> Type -> Err Type
+checkTypesRaw t1 t2 
     | t1 == t2  = Ok t1
-    | otherwise =  getMaxType t1 t2
+    | otherwise = getMaxType t1 t2
 
 getMaxType :: Type -> Type -> Err Type
 getMaxType TypeInt TypeFloat = Ok TypeFloat
@@ -160,27 +165,24 @@ getMaxType TypeChar TypeString = Ok TypeString
 getMaxType TypeString TypeChar = Ok TypeString
 getMaxType _ _ = Bad "i tipi non sono compatibili"
 
-
 checkBoolTypes :: Err Type -> Err Type -> Err Type
-checkBoolTypes first second = case check of
-    Ok tp -> if (tp == TypeBool)
+checkBoolTypes first second = case (checkTypes first second) of
+    Ok tp -> if (tp == TypeBoolean)
         then Ok tp
         else Bad ("error type: must be of type 'bool'")
     Bad msg -> Bad msg
-    where
-        check = checkTypes first second
 
 checkAritmTypes :: Err Type -> Err Type -> Err Type
-checkAritmTypes first second = case check of
-    Ok tp -> if (tp == TypeInt || tp == TypeFloat)
-        then Ok tp
-        else Bad ("error type: must be of type 'int'")
-    Bad msg -> Bad msg
-    where
-        check = checkTypes first second
+checkAritmTypes first second = case (checkAritmType first) of
+    Ok tp -> case (checkAritmType second) of
+        Ok tp -> Ok tp
+        Bad msg -> Bad (msg ++ " but found: " ++ (type2string $ getType second))
+    Bad msg -> Bad (msg ++ " but found: " ++ (type2string $ getType first))
 
-checkAritmType :: Err Type -> Bool
-checkAritmType tp = (tp == (Ok TypeInt)) || (tp == (Ok TypeFloat)) 
+checkAritmType :: Err Type -> Err Type
+checkAritmType tp = if (tp == (Ok TypeInt)) || (tp == (Ok TypeFloat)) 
+    then tp
+    else Bad "Incorect type declaration, must be 'Int' or 'Float'"
 
 checkRelTypes :: Err Type -> Err Type -> Err Type
 checkRelTypes first second = checkAritmTypes first second
@@ -209,14 +211,13 @@ isIdentInVars name ((VarElem ident tp):vars) = if name == ident
     else isIdentInVars name vars
 
 checkTypesFakeSafe :: Err Type
-checkTypesFakeSafe = Bad "Type Fake"
+checkTypesFakeSafe = Ok checkTypesFake
 
 checkTypesFake :: Type
 checkTypesFake = TypeError "Type fake"
 
 getFunctionType :: FunCall -> Enviroment -> Err Type
-getFunctionType (Call ident rExprs) env = isFunCallGood (getIdent ident) rExprs env
-
+getFunctionType (Call ident rExprsNode) env = isFunCallGood (getIdent ident) rExprsNode env
 
 isFuncInEnv :: String -> Enviroment -> Maybe (Type, [Type])
 isFuncInEnv funcName env = case match of
@@ -236,107 +237,116 @@ isFuncInFuncs funcName ((FuncElem ident tp params):funcs) = if funcName == ident
     then Just (tp, params)
     else isFuncInFuncs funcName funcs
 
-isFunCallGood :: String -> [RExpr] -> Enviroment -> Err Type
-isFunCallGood funcName rExprs env = 
+isFunCallGood :: String -> [AbsNode] -> Enviroment -> Err Type
+isFunCallGood funcName rExprsNode env = 
     case (isFuncInEnv funcName env) of
         Just (tp, params) ->
-            case (check_RExprs rExprs params env) of
+            case (get_RExprsNode rExprsNode params env) of
                 Nothing -> Ok tp
                 Just msg -> Bad ("Error in procedure call: " ++ funcName ++ " error: " ++ msg)
         Nothing -> Bad ("Function: " ++ funcName ++ " is not declared in the scope")
 
+getNodeInfo :: AbsNode -> String
+getNodeInfo node = let (Pn line column) = (pos node) in ("(line: " ++ (show line) ++ " column: " ++ (show column) ++ ")")
+
 ------------------------------------------------------------
 --------- Parser ABS ---------------------------------------
 ------------------------------------------------------------
-typeChecking :: ProgramNode -> Attributes
-typeChecking abstractSyntaxTree = finalAttr
-    where 
-        finalAttr = execState (check_Prog abstractSyntaxTree) defaultAttributes
 
-check_Prog :: ProgramNode -> State Attributes ()
+check_Prog :: AbsNode -> State Attributes ()
 check_Prog (ProgramNode posn (Prog decls)) = do
-    check_Decls decls
+    check_DeclsNode decls
     return ()
 
-check_Decls :: [Decl] -> State Attributes ()
-check_Decls (x:xs) = do
+check_DeclsNode :: [AbsNode] -> State Attributes ()
+check_DeclsNode ((DeclNode pos x):xs) = do
     check_Decl x
     isError <- gets isError
     case isError of
         Ok _ -> do
-            check_Decls xs
+            check_DeclsNode xs
             return()
         Bad _ -> do
             return()
-    return ()
 
-check_Decls [] = do
+check_DeclsNode [] = do
     return ()
 
 check_Decl :: Decl -> State Attributes ()
 check_Decl node = case node of
-    DvarBInit basicType varDeclInits -> do
-        check_VarDeclInits tp varDeclInits
-        return ()
-        where
-            tp = getBasicTypeSafe basicType
-    DvarCInit typeSpec varDeclInits -> do
-        check_VarDeclInits tp varDeclInits
-        return ()
-        where
-            tp = getTypeSpecSafe typeSpec
-    Dfun basicType ident parameters compStmt returnStmt -> do
-        pushToEnv $ FuncElem (getIdent ident) (getBasicType basicType) (serializeEnvParameters parameters)
-        pushToEnvFuncParams parameters
-        check_CompStmt compStmt
+    -- Check it the declared left type is equal or consistent with the left expression type
+    -- If the declaration pass the type checking verification it is inserted in the environment
+    DvarBInit modalityDeclNode ident basicTypeNode complexRExprNode -> do
         env <- gets env
-        case (check_ReturnStmt returnStmt env) of 
+        case (checkTypes tp (get_ComplexRExprNode complexRExprNode env)) of
+            Bad msg -> setError $ getNodeInfo complexRExprNode ++ msg
+            Ok tp1 -> pushToEnv (VarElem (getIdent ident) tp1)
+        return ()
+        where
+            tp = get_BasicTypeNode basicTypeNode
+    -- TODO handle array and pointer cases
+    DvarCInit modalityDeclNode ident typeSpecNode complexRExprNode -> do
+        env <- gets env
+        case (checkTypes tp (get_ComplexRExprNode complexRExprNode env)) of
+            Bad msg -> setError $ getNodeInfo complexRExprNode ++ msg
+            Ok tp1 -> pushToEnv (VarElem (getIdent ident) tp1)
+        return ()
+        where
+            tp = get_TypeSpecNode typeSpecNode
+    Dfun ident parametersNode basicTypeNode compStmtNode returnStmtNode -> do
+        pushToEnv $ FuncElem (getIdent ident) (getType $ get_BasicTypeNode basicTypeNode) (serializeEnvParameters parametersNode)
+        pushToEnvFuncParams parametersNode
+        check_CompStmtNode compStmtNode
+        env <- gets env
+        case (let (ReturnStmtNode pos returnStmt) = returnStmtNode in (get_ReturnStmt returnStmt env)) of 
             Ok tp -> do
-                case (checkTypes (getBasicTypeSafe basicType) (Ok tp)) of
+                case (checkTypes (get_BasicTypeNode basicTypeNode) (Ok tp)) of
                     Ok _ -> do
                         return()
                     Bad msg -> do
-                        setError $ "In function: " ++ (getIdent ident) ++ " declared type and returned type are not equal"
+                        setError $ (getNodeInfo basicTypeNode) ++ "In function: " ++ (getIdent ident) ++ " declared type and returned type are not equal " ++ msg
                         return()
             Bad msg -> do
-                setError msg
+                setError $ (getNodeInfo returnStmtNode) ++ msg
                 return()
-        return()
 
-check_ReturnStmt :: ReturnStmt -> Enviroment -> Err Type
-check_ReturnStmt node env = case node of
-    RetExpVoid -> Ok TypeVoid
-    RetExp rExpr -> check_RExpr rExpr env
-
-check_CompStmt :: CompStmt -> State Attributes ()
-check_CompStmt (BlockDecl decls stmts) = do
-    check_Decls decls
-    check_Stmts stmts
+check_ModalityDeclNode :: AbsNode -> State Attributes ()
+check_ModalityDeclNode (ModalityDeclNode posn node) = do
     return ()
 
-check_Stmts :: [Stmt] -> State Attributes ()
-check_Stmts (x:xs) = do
-    check_Stmt x
+get_ReturnStmt :: ReturnStmt -> Enviroment -> Err Type
+get_ReturnStmt node env = case node of
+    RetExpVoid -> Ok TypeUnit
+    RetExp rExpr -> get_RExprNode rExpr env
+
+check_CompStmtNode :: AbsNode -> State Attributes ()
+check_CompStmtNode (CompStmtNode _ (BlockDecl decls stmts)) = do
+    check_DeclsNode decls
+    check_StmtsNode stmts
+    return ()
+
+check_StmtsNode :: [AbsNode] -> State Attributes ()
+check_StmtsNode (x:xs) = do
+    check_StmtNode x
     isError <- gets isError
     case isError of
         Ok _ -> do
-            check_Stmts xs
+            check_StmtsNode xs
             return()
         Bad _ -> do
             return()
+
+check_StmtsNode [] = do
     return ()
 
-check_Stmts [] = do
-    return ()
-
-check_Stmt :: Stmt -> State Attributes ()
-check_Stmt node = do
+check_StmtNode :: AbsNode -> State Attributes ()
+check_StmtNode (StmtNode _ node) = do
     env <- gets env
     case node of
         Comp compStmt -> do
-            check_CompStmt compStmt
+            check_CompStmtNode compStmt
             return ()
-        ProcCall funCall -> do
+        ProcCall (FunCallNode _ funCall) -> do
             check_FunCall funCall
             return ()
         Jmp jumpStmt -> do
@@ -352,12 +362,10 @@ check_Stmt node = do
                 Ok tp -> do
                     return ()
                 Bad msg -> do
-                    setError msg
+                    setError $ (getNodeInfo lExpr) ++ msg
                     return ()
-            return ()
             where
-                tplExpr = check_LExpr lExpr env
-    return ()
+                tplExpr = get_LExprNode lExpr env
 
 check_FunCall :: FunCall -> State Attributes ()
 check_FunCall (Call ident rExprs) = do
@@ -368,100 +376,102 @@ check_FunCall (Call ident rExprs) = do
         Bad msg -> do
             setError msg
             return ()
-    return ()
     where
         funcName = getIdent ident
 
-check_RExprs :: [RExpr] -> [Type] -> Enviroment -> Maybe String
-check_RExprs [] [] _ = Nothing 
-check_RExprs (x:xs) [] env = Just "different function arguments number"
-check_RExprs [] (x:xs) env = Just "different function arguments number"
-check_RExprs (rExpr:rExprs) (param:params) env = case (check_RExpr rExpr env) of
-    Ok tp -> case (checkGoodTypes tp param) of 
-                Ok _    -> check_RExprs rExprs params env
-                Bad _   -> Just "argument types are not equal"
+get_RExprsNode :: [AbsNode] -> [Type] -> Enviroment -> Maybe String
+get_RExprsNode [] [] _ = Nothing 
+get_RExprsNode (x:xs) [] env = Just "different function arguments number"
+get_RExprsNode [] (x:xs) env = Just "different function arguments number"
+get_RExprsNode (rExprNode:rExprsNode) (param:params) env = case (get_RExprNode rExprNode env) of
+    Ok tp -> case (checkTypesRaw tp param) of 
+        Ok _ -> get_RExprsNode rExprsNode params env
+        Bad _ -> Just "argument types are not equal"
     Bad msg -> Just msg
 
+get_ComplexRExpr :: ComplexRExpr -> Enviroment -> Err Type
+get_ComplexRExpr node env = case node of
+    Simple rExprNode -> get_RExprNode rExprNode env
+    Array complexRExprNode -> checkTypesFakeSafe
 
---check_VarDeclInit :: Err Type -> VarDeclInit -> State Attributes ()
---check_VarDeclInit tp node = do 
---    env <- gets env
---    case node of
---        VarDeclIn ident complexRExpr -> do
---            case (checkTypes tp tpRexpr) of
---                Bad msg -> setError msg
---                Ok tp1 -> pushToEnv (VarElem (getIdent ident) tp1)
---            return ()
---            where
---            tpRexpr = check_ComplexRExpr complexRExpr env
---    return ()
-
-
-check_ComplexRExpr :: ComplexRExpr -> Enviroment -> Err Type
-check_ComplexRExpr node env = case node of
-    Simple rExpr -> check_RExpr rExpr env
-    Array complexRExpr -> checkTypesFakeSafe
-
-check_RExpr :: RExpr -> Enviroment -> Err Type
-check_RExpr node env = case node of
+get_RExpr :: RExpr -> Enviroment -> Err Type
+get_RExpr node env = case node of
     OpRelation rExpr1 rExpr2 _ -> checkRelTypes tp1 tp2
         where
-            tp1 = check_RExpr rExpr1 env
-            tp2 = check_RExpr rExpr2 env
+            tp1 = get_RExprNode rExpr1 env
+            tp2 = get_RExprNode rExpr2 env
     OpAritm rExpr1 rExpr2 _ -> checkAritmTypes tp1 tp2
         where
-            tp1 = check_RExpr rExpr1 env
-            tp2 = check_RExpr rExpr2 env
+            tp1 = get_RExprNode rExpr1 env
+            tp2 = get_RExprNode rExpr2 env
     OpBoolean rExpr1 rExpr2 _ -> checkBoolTypes tp1 tp2
         where
-            tp1 = check_RExpr rExpr1 env
-            tp2 = check_RExpr rExpr2 env
-    Not rExpr -> check_RExpr rExpr env
-    Neg rExpr -> check_RExpr rExpr env
-    Ref lExpr -> check_LExpr lExpr env
-    FCall funCall -> getFunctionType funCall env
+            tp1 = get_RExprNode rExpr1 env
+            tp2 = get_RExprNode rExpr2 env
+    Not rExpr -> get_RExprNode rExpr env
+    Neg rExpr -> get_RExprNode rExpr env
+    Ref lExpr -> get_LExprNode lExpr env
+    FCall funCall -> get_FunCallNode funCall env
     Int integer -> Ok TypeInt
     Char char -> Ok TypeChar
     String string -> Ok TypeString
     Float double -> Ok TypeFloat
-    Bool boolean -> Ok TypeBool
-    Lexpr lExpr -> check_LExpr lExpr env
+    Bool boolean -> Ok TypeBoolean
+    Lexpr lExpr -> get_LExprNode lExpr env
 
-check_LExpr :: LExpr -> Enviroment -> Err Type
-check_LExpr node env = case node of
+get_LExpr :: LExpr -> Enviroment -> Err Type
+get_LExpr node env = case node of
     Deref rExpr -> case tpRExpr of
-        Ok tp -> if checkAritmType tpRExpr
-            then Ok tp
-            else Bad ("Deref expressions must be of type int or float, but: " ++ (type2string tp) ++ " found")
+        Ok tp -> checkAritmType tpRExpr
         Bad msg -> Bad msg
-        where tpRExpr = check_RExpr rExpr env
+        where tpRExpr = get_RExprNode rExpr env
     PreInc lExpr -> case tpLExpr of
-        Ok tp -> if checkAritmType tpLExpr
-            then Ok tp
-            else Bad ("PreInc expressions must be of type int or float, but: " ++ (type2string tp) ++ " found")
+        Ok tp -> checkAritmType tpLExpr
         Bad msg -> Bad msg
-        where tpLExpr = check_LExpr lExpr env
+        where tpLExpr = get_LExprNode lExpr env
     PreDecr lExpr -> case tpLExpr of
-        Ok tp -> if checkAritmType tpLExpr
-            then Ok tp
-            else Bad ("PreInc expressions must be of type int or float, but: " ++ (type2string tp) ++ " found")
+        Ok tp -> checkAritmType tpLExpr
         Bad msg -> Bad msg
-        where tpLExpr = check_LExpr lExpr env
+        where tpLExpr = get_LExprNode lExpr env
     PostInc lExpr -> case tpLExpr of
-        Ok tp -> if checkAritmType tpLExpr
-            then Ok tp
-            else Bad ("PosInc expressions must be of type int or float, but: " ++ (type2string tp) ++ " found")
+        Ok tp -> checkAritmType tpLExpr
         Bad msg -> Bad msg
-        where tpLExpr = check_LExpr lExpr env
+        where tpLExpr = get_LExprNode lExpr env
     PostDecr lExpr -> case tpLExpr of
-        Ok tp -> if checkAritmType tpLExpr
-            then Ok tp
-            else Bad ("PostDecr expressions must be of type int or float, but: " ++ (type2string tp) ++ " found")
+        Ok tp -> checkAritmType tpLExpr
         Bad msg -> Bad msg
-        where tpLExpr = check_LExpr lExpr env
-    BasLExpr bLExpr -> check_BLExpr bLExpr env
+        where tpLExpr = get_LExprNode lExpr env
+    BasLExpr bLExpr -> get_BLExprNode bLExpr env
 
-check_BLExpr :: BLExpr -> Enviroment -> Err Type
-check_BLExpr node env = case node of
+get_BLExpr :: BLExpr -> Enviroment -> Err Type
+get_BLExpr node env = case node of
     ArrayEl bLExpr rExpr -> checkTypesFakeSafe -- TODO
     Id ident -> checkIdentType (getIdent ident) env
+
+------------------------------------------------------------
+--------- Parser AbsNode -----------------------------------
+------------------------------------------------------------
+
+get_FunCallNode :: AbsNode -> Enviroment -> Err Type
+get_FunCallNode (FunCallNode _ node) env = getFunctionType node env
+
+get_BLExprNode :: AbsNode -> Enviroment -> Err Type
+get_BLExprNode (BLExprNode _ node) env = get_BLExpr node env
+
+get_LExprNode :: AbsNode -> Enviroment -> Err Type
+get_LExprNode (LExprNode _ node) = get_LExpr node
+
+get_BasicTypeNode :: AbsNode -> Err Type
+get_BasicTypeNode (BasicTypeNode _ node) = getBasicTypeSafe node
+
+get_TypeSpecNode :: AbsNode -> Err Type
+get_TypeSpecNode (TypeSpecNode _ node) = getTypeSpecSafe node
+
+get_CompoundTypeNode :: AbsNode -> Err Type
+get_CompoundTypeNode (CompoundTypeNode _ node) = getCompoundTypeSafe node
+
+get_ComplexRExprNode :: AbsNode -> Enviroment -> Err Type
+get_ComplexRExprNode (ComplexRExprNode _ node) env = get_ComplexRExpr node env
+
+get_RExprNode :: AbsNode -> Enviroment -> Err Type
+get_RExprNode (RExprNode _ node) env = get_RExpr node env

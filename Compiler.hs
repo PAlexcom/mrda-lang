@@ -7,7 +7,7 @@ import System.Exit ( exitFailure, exitSuccess )
 import Lexer
 import Parser
 import Error
---import TypeChecker
+import TypeChecker
 --import CodeGenerator
 --import PrettyPrinterTAC
 --import PrettyPrinterABS
@@ -25,11 +25,11 @@ compile fileName text = do
             print abst
             --putStrLn "-----------------------\n ABS Pretty Printer \n-----------------------"
             --putStrLn $ prettyPrintABS abst
-            --putStrLn "-----------------------\n Type Checking \n-----------------------"
-            --print typeCheckingReport
-            --case isTypeCheckOk of
-            --    Ok _ -> do
-            --        putStrLn "-----------------------\n OK | Type Checking \n-----------------------"
+            putStrLn "-----------------------\n Type Checking \n-----------------------"
+            print typeCheckingReport
+            case isTypeCheckOk of
+                Ok _ -> do
+                    putStrLn "-----------------------\n OK | Type Checking \n-----------------------"
             --        putStrLn "-----------------------\n TAC \n-----------------------"
             --        print tacAttr
             --        putStrLn "-----------------------\n TAC Source Code \n-----------------------"
@@ -38,10 +38,10 @@ compile fileName text = do
             --        putStrLn $ prettyPrintTAC $ tac tacAttr
             --        where
             --            tacAttr = tacGenerator abst
-            --    Bad msg -> putStrLn ("-----------------------\n!!! Error: " ++ msg ++ " \n-----------------------")
-            --where
-            --    typeCheckingReport = typeChecking abst
-            --    isTypeCheckOk = isError typeCheckingReport
+                Bad msg -> putStrLn ("-----------------------\n!!! Error => " ++ msg ++ " \n-----------------------")
+            where
+                typeCheckingReport = typeChecking abst
+                isTypeCheckOk = isError typeCheckingReport
     return ()
     where
         tokens = parseTokens text
