@@ -21,9 +21,15 @@ data Enviroment
     deriving (Show)
 
 data EnviromentElement
-    = FuncElem {ident :: String, tp :: Type, params :: [Type]} -- TODO Bisogna modificare per aggiungere la modalità
-    | VarElem {ident :: String, tp :: Type} -- TODO Bisogna modificare per aggiungere la modalità
+    = FuncElem {ident :: String, tp :: Type, params :: [Type]}
+    | VarElem {ident :: String, tp :: Type, modality :: ModalityType}
     deriving (Show, Eq)
+
+data ModalityType
+    = Val
+    | ValRes
+    | Var
+    deriving (Eq, Show, Read)    
 
 data Type 
     = TypeInt
@@ -36,6 +42,9 @@ data Type
     | TypePointer Type
     | TypeError String
     deriving (Eq, Show, Read)
+
+-- TODO array
+-- TODO pointer
 
 ------------------------------------------------------------
 --------- Enviroment Utilities -----------------------------
@@ -62,11 +71,11 @@ setParentEnv = do
 
 pushToEnv :: EnviromentElement -> State Attributes ()
 pushToEnv envElem = case envElem of
-    FuncElem _ _ _-> do
+    FuncElem _ _ _ -> do
         currentEnv <- gets env
         modify (\attr -> attr {env = currentEnv {funcs = envElem : (funcs currentEnv)}})
         return ()
-    VarElem _ _ -> do
+    VarElem _ _ _ -> do
         currentEnv <- gets env
         modify (\attr -> attr {env = currentEnv {vars = envElem : (vars currentEnv)}})
         return ()
@@ -74,9 +83,8 @@ pushToEnv envElem = case envElem of
 pushToEnvFuncParams :: [AbsNode] -> State Attributes ()
 pushToEnvFuncParams [] = do
     return ()
-pushToEnvFuncParams ((ParameterNode _ (Param _ ident tp)):params) = do
-    -- TODO quando vengono gestiti gli array creare la struttura dati ArrayElem
-    pushToEnv $ VarElem (getIdent ident) (getType $ get_TypeSpecNode tp)
+pushToEnvFuncParams ((ParameterNode _ (Param modality ident tp)):params) = do
+    pushToEnv $ VarElem (getIdent ident) (getType $ get_TypeSpecNode tp) (getModalityParam modality)
     pushToEnvFuncParams params
     return ()
 
@@ -127,6 +135,18 @@ type2string tp = case tp of
     TypeUnit            -> "Unit"
     TypeArray tp int    -> "Array"
     TypePointer tp      -> "Pointer"
+
+getModalityParam :: AbsNode -> ModalityType
+getModalityParam (ModalityParamNode _ node) = case node of
+    ModalityPEmpty -> Var
+    ModalityP_val -> Val
+    ModalityP_var -> Var
+    ModalityP_valres -> ValRes
+
+getModalityDecl :: AbsNode -> ModalityType
+getModalityDecl (ModalityDeclNode _ node) = case node of
+    ModalityD_val -> Val
+    ModalityD_var -> Var
 
 ------------------------------------------------------------
 --------- Type Checker -------------------------------------
@@ -196,15 +216,12 @@ isIdentInEnv name env = case match of
 isIdentInVars :: String -> [EnviromentElement] -> Maybe Type
 isIdentInVars name [] = Nothing
 
-isIdentInVars name ((VarElem ident tp):vars) = if (name == ident)
+isIdentInVars name ((VarElem ident tp _):vars) = if (name == ident)
     then Just tp
     else isIdentInVars name vars
 
 checkTypesFakeSafe :: Err Type
-checkTypesFakeSafe = Ok checkTypesFake
-
-checkTypesFake :: Type
-checkTypesFake = TypeError "Type fake"
+checkTypesFakeSafe = Ok TypeUnit
 
 getFunctionType :: FunCall -> Enviroment -> Err Type
 getFunctionType (Call ident rExprsNode) env = isFunCallGood (getIdent ident) rExprsNode env
@@ -270,7 +287,7 @@ check_Decl node = case node of
         env <- gets env
         case (checkTypes tp (get_ComplexRExprNode complexRExprNode env)) of
             Bad msg -> setError $ getNodeInfo complexRExprNode ++ msg
-            Ok tp1 -> pushToEnv (VarElem (getIdent ident) tp1)
+            Ok tp1 -> pushToEnv (VarElem (getIdent ident) tp1 (getModalityDecl modalityDeclNode))
         return ()
         where
             tp = get_BasicTypeNode basicTypeNode
@@ -279,7 +296,7 @@ check_Decl node = case node of
         env <- gets env
         case (checkTypes tp (get_ComplexRExprNode complexRExprNode env)) of
             Bad msg -> setError $ getNodeInfo complexRExprNode ++ msg
-            Ok tp1 -> pushToEnv (VarElem (getIdent ident) tp1)
+            Ok tp1 -> pushToEnv (VarElem (getIdent ident) tp1 (getModalityDecl modalityDeclNode))
         return ()
         where
             tp = get_TypeSpecNode typeSpecNode
