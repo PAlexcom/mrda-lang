@@ -20,7 +20,7 @@ $universal = [\0-\255]                          -- universal: any character
     \( | \) | \| \| | \& \& | \! | \= \= | \! \= | \< | \< \= |
     \> | \> \= | \+ | \- | \* | \/ | \% | \^ | \& |
     \, | \+ \+ | \- \- | \[ | \] | \; | \= | \{ | \} |
-    \* \= | \+ \= | \/ \= | \- \= | \:
+    \* \= | \+ \= | \/ \= | \- \= | \: | \< \- | \= \>
 
 tokens :-
     -- Toss single line commenTokenSymbols
@@ -32,6 +32,11 @@ tokens :-
     @reservedSyms                           {  \p s -> Token p (TokenSymbols s) }
     $digit+                                 {  \p s -> Token p (TokenInt s) }
     $digit+ \. $digit+ (e (\-)? $digit+)?   {  \p s -> Token p (TokenDouble s) }
+    "to"                                    {  \p s -> Token p (TokenSymbols s) }
+    "ex"                                    {  \p s -> Token p (TokenSymbols s) }
+    "try"                                   {  \p s -> Token p (TokenSymbols s) }
+    "catch"                                 {  \p s -> Token p (TokenSymbols s) }
+    "case"                                  {  \p s -> Token p (TokenSymbols s) }
     "false"                                 {  \p s -> Token p (TokenSymbols s) }
     "true"                                  {  \p s -> Token p (TokenSymbols s) }
     "Boolean"                               {  \p s -> Token p (TokenSymbols s) }

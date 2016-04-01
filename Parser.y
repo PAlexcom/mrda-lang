@@ -33,10 +33,17 @@ import Error
     ';'         { Token _ (TokenSymbols ";") }
     '<'         { Token _ (TokenSymbols "<") }
     '<='        { Token _ (TokenSymbols "<=") }
+    '<-'        { Token _ (TokenSymbols "<-") }
     '='         { Token _ (TokenSymbols "=") }
     '=='        { Token _ (TokenSymbols "==") }
     '>'         { Token _ (TokenSymbols ">") }
     '>='        { Token _ (TokenSymbols ">=") }
+    '=>'        { Token _ (TokenSymbols "=>") }
+    'to'        { Token _ (TokenSymbols "to") }
+    'ex'        { Token _ (TokenSymbols "ex") }
+    'case'      { Token _ (TokenSymbols "case") }
+    'try'       { Token _ (TokenSymbols "try") }
+    'catch'     { Token _ (TokenSymbols "catch") }
     'false'     { Token _ (TokenSymbols "false") }
     'true'      { Token _ (TokenSymbols "true") }
     '['         { Token _ (TokenSymbols "[") }
@@ -72,7 +79,7 @@ import Error
 
 %left '||' '&&'
 %left '!'
-%nonassoc '<' '>' '<=' '>=' '==' '!='
+%nonassoc '<' '>' '<=' '<-' '>=' '=>' '==' '!='
 %left '+' '-'
 %left '*' '/' '%'
 %right '^'
@@ -192,13 +199,17 @@ ListStmt
     | ListStmt Stmt                         { flip (:) $1 $2 }
 
 Stmt :: {AbsNode}
-    : '{' CompStmt '}'                      { StmtNode (tpos $1) (Comp $2) }
-    | FunCall ';'                           { StmtNode (pos $1) (ProcCall $1) }
-    | JumpStmt ';'                          { StmtNode (pos $1) (Jmp $1) }
-    | IterStmt                              { StmtNode (pos $1) (Iter $1) }
-    | SelectionStmt                         { StmtNode (pos $1) (Sel $1) }
-    | LExpr Assignment_op RExpr ';'         { StmtNode (pos $1) (Assgn $1 $2 $3) }
-    | LExpr ';'                             { StmtNode (pos $1) (LExprStmt $1) }
+    : '{' CompStmt '}'                     { StmtNode (tpos $1) (Comp $2) }
+    | FunCall ';'                          { StmtNode (pos $1) (ProcCall $1) }
+    | JumpStmt ';'                         { StmtNode (pos $1) (Jmp $1) }
+    | IterStmt                             { StmtNode (pos $1) (Iter $1) }
+    | SelectionStmt                        { StmtNode (pos $1) (Sel $1) }
+    | LExpr Assignment_op RExpr ';'        { StmtNode (pos $1) (Assgn $1 $2 $3) }
+    | LExpr ';'                            { StmtNode (pos $1) (LExprStmt $1) }
+    | TryCatchStmt                         { StmtNode (pos $1) (ExHandler $1)}
+
+TryCatchStmt :: {AbsNode}
+    : 'try' Stmt 'catch' '{' 'case' 'ex' ':' Ident '=>' Stmt '}'    { TryCatchStmtNode (tpos $1) (TryCatch $2 (Ident (prToken $8)) $10) }
 
 Assignment_op :: {AbsNode} 
     : '='                                  { Assignment_opNode (tpos $1) Assign }
@@ -221,9 +232,9 @@ SelectionStmt :: {AbsNode}
     | 'if' '(' RExpr ')' Stmt              { SelectionStmtNode (tpos $1) (IfNoElse $3 $5) }
 
 IterStmt :: {AbsNode} 
-    : 'while' '(' RExpr ')' Stmt           { IterStmtNode (tpos $1) (While $3 $5) }
-    | 'do' Stmt 'while' '(' RExpr ')' ';'  { IterStmtNode (tpos $1) (DoWhile $2 $5) }
-
+    : 'while' '(' RExpr ')' Stmt                        { IterStmtNode (tpos $1) (While $3 $5) }
+    | 'do' Stmt 'while' '(' RExpr ')' ';'               { IterStmtNode (tpos $1) (DoWhile $2 $5) }
+    | 'for' '(' Ident '<-' RExpr 'to' RExpr ')' Stmt    { IterStmtNode (tpos $1) (For (Ident (prToken $3)) $5 $7 $9) }
 
 {
 
@@ -243,6 +254,7 @@ data AbsNode
     | ModalityDeclNode  {pos::Posn, modalityDecl::ModalityDecl}
     | CompStmtNode      {pos::Posn, compStmt::CompStmt}
     | StmtNode          {pos::Posn, stmt::Stmt}
+    | TryCatchStmtNode  {pos::Posn, tryCatch::TryCatchStmt}
     | Assignment_opNode {pos::Posn, assignment_op::Assignment_op}
     | JumpStmtNode      {pos::Posn, jumpStmt::JumpStmt} 
     | ReturnStmtNode    {pos::Posn, returnStmt::ReturnStmt}
@@ -344,6 +356,11 @@ data Stmt
     | Sel AbsNode
     | Assgn AbsNode AbsNode AbsNode
     | LExprStmt AbsNode
+    | ExHandler AbsNode
+    deriving (Eq, Ord, Show)
+
+data TryCatchStmt
+    = TryCatch AbsNode Ident AbsNode
     deriving (Eq, Ord, Show)
 
 data Assignment_op 
@@ -364,7 +381,10 @@ data ReturnStmt
 data SelectionStmt = IfNoElse AbsNode AbsNode | IfElse AbsNode AbsNode AbsNode
   deriving (Eq, Ord, Show)
 
-data IterStmt = While AbsNode AbsNode | DoWhile AbsNode AbsNode
+data IterStmt 
+    = While AbsNode AbsNode 
+    | DoWhile AbsNode AbsNode
+    | For Ident AbsNode AbsNode AbsNode
   deriving (Eq, Ord, Show)
 
 
