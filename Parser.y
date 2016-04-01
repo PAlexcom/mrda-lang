@@ -376,7 +376,7 @@ thenM = (>>=)
 
 happyError :: [Token] -> Err a
 happyError ts =
-  Bad $ "syntax error at " ++ tokenPos ts ++ 
+  Bad $ "Error => syntax error at " ++ tokenPos ts ++ 
   case ts of
     [] -> []
     [Err _] -> " due to lexer error"

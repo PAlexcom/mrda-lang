@@ -19,7 +19,7 @@ compile fileName text = do
     putStrLn "-----------------------\n Abstract Syntax Tree \n-----------------------"
     case abstractSyntaxTree of
         Bad msg -> do
-            putStrLn ("-----------------------\n !!! Error => " ++ msg ++ " \n-----------------------")
+            putStrLn ("***********************\n" ++ msg ++ "\n***********************")
             return ()
         Ok abst -> do
             print abst
@@ -38,7 +38,7 @@ compile fileName text = do
             --        putStrLn $ prettyPrintTAC $ tac tacAttr
                     where
                         tacAttr = tacGenerator abst
-                Bad msg -> putStrLn ("-----------------------\n!!! Error => " ++ msg ++ " \n-----------------------")
+                Bad msg -> putStrLn ("***********************\n" ++ msg ++ " \n***********************")
             where
                 typeCheckingReport = typeChecking abst
                 isTypeCheckOk = isError typeCheckingReport

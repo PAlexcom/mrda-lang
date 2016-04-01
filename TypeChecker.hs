@@ -15,8 +15,6 @@ data Attributes = Attributes {
 data Enviroment 
     = Env {
         vars :: [EnviromentElement],
-        arrays :: [EnviromentElement],
-        pointers :: [EnviromentElement],
         funcs :: [EnviromentElement],
         parent :: Maybe Enviroment
     }
@@ -25,8 +23,6 @@ data Enviroment
 data EnviromentElement
     = FuncElem {ident :: String, tp :: Type, params :: [Type]} -- TODO Bisogna modificare per aggiungere la modalità
     | VarElem {ident :: String, tp :: Type} -- TODO Bisogna modificare per aggiungere la modalità
-    | ArrayElem {ident :: String, tp :: Type, dim :: Int} -- TODO Bisogna modificare per aggiungere la modalità
-    | PointerElem {ident :: String, tp :: Type} -- TODO Bisogna modificare per aggiungere la modalità
     deriving (Show, Eq)
 
 data Type 
@@ -45,7 +41,7 @@ data Type
 --------- Enviroment Utilities -----------------------------
 ------------------------------------------------------------
 
-defaultAttributes = Attributes (Ok "") (Env [] [] [] [] Nothing) 0 0
+defaultAttributes = Attributes (Ok "") (Env [] [] Nothing) 0 0
 
 increaseCounter :: Attributes -> Attributes
 increaseCounter attr = attr {counter = (counter attr) + 1}
@@ -61,7 +57,7 @@ setError msg = do
 setParentEnv :: State Attributes ()
 setParentEnv = do
     oldEnv <- gets env
-    modify (\attr -> attr {env = (Env {vars = [], arrays = [], pointers = [], funcs = [], parent = Just oldEnv})})
+    modify (\attr -> attr {env = (Env {vars = [], funcs = [], parent = Just oldEnv})})
     return ()
 
 pushToEnv :: EnviromentElement -> State Attributes ()
@@ -69,10 +65,6 @@ pushToEnv envElem = case envElem of
     FuncElem _ _ _-> do
         currentEnv <- gets env
         modify (\attr -> attr {env = currentEnv {funcs = envElem : (funcs currentEnv)}})
-        return ()
-    ArrayElem _ _ _ -> do
-        currentEnv <- gets env
-        modify (\attr -> attr {env = currentEnv {arrays = envElem : (arrays currentEnv)}})
         return ()
     VarElem _ _ -> do
         currentEnv <- gets env
@@ -135,7 +127,6 @@ type2string tp = case tp of
     TypeUnit            -> "Unit"
     TypeArray tp int    -> "Array"
     TypePointer tp      -> "Pointer"
-    TypeError msg       -> "Error" -- TODO remove me and all my dependencies, I do not need for anything
 
 ------------------------------------------------------------
 --------- Type Checker -------------------------------------
@@ -205,7 +196,7 @@ isIdentInEnv name env = case match of
 isIdentInVars :: String -> [EnviromentElement] -> Maybe Type
 isIdentInVars name [] = Nothing
 
-isIdentInVars name ((VarElem ident tp):vars) = if name == ident
+isIdentInVars name ((VarElem ident tp):vars) = if (name == ident)
     then Just tp
     else isIdentInVars name vars
 
@@ -246,7 +237,7 @@ isFunCallGood funcName rExprsNode env =
         Nothing -> Bad ("Function: " ++ funcName ++ " is not declared in the scope")
 
 getNodeInfo :: AbsNode -> String
-getNodeInfo node = let (Pn line column) = (pos node) in ("(line: " ++ (show line) ++ " column: " ++ (show column) ++ ")")
+getNodeInfo node = let (Pn line column) = (pos node) in ("Error => (line: " ++ (show line) ++ " column: " ++ (show column) ++ ")")
 
 ------------------------------------------------------------
 --------- Parser ABS ---------------------------------------
@@ -355,7 +346,18 @@ check_StmtNode (StmtNode _ node) = do
         Sel selectionStmt -> do
             return ()
         Assgn lExpr assignment_op rExpr -> do
+            -- TODO if aritm operations check to be integers or floats
+            case lExpr1 of
+                Ok tp -> case rExpr1 of
+                    Ok tp -> case (checkTypes lExpr1 rExpr1) of
+                        Ok tp -> do return ()
+                        Bad msg -> setError $ (getNodeInfo rExpr) ++ msg 
+                    Bad msg -> setError $ (getNodeInfo rExpr) ++ msg
+                Bad msg -> setError $ (getNodeInfo lExpr) ++ msg 
             return ()
+            where
+                lExpr1 = get_LExprNode lExpr env
+                rExpr1 = get_RExprNode rExpr env
         LExprStmt lExpr -> do
             case tplExpr of
                 Ok tp -> do
