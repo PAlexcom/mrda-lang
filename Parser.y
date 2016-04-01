@@ -107,10 +107,10 @@ RExpr :: {AbsNode}
     | '-' RExpr %prec NEG           { RExprNode (tpos $1) (Neg $2) }
     | '&' LExpr                     { RExprNode (tpos $1) (Ref $2) }
     | FunCall                       { RExprNode (pos $1) (FCall $1) }
-    | Integer                       { RExprNode (tokenPosn $1) (Int (read (prToken $1)::Integer)) }
-    | Char                          { RExprNode (tokenPosn $1) (Char (head (prToken $1))) }
-    | String                        { RExprNode (tokenPosn $1) (String (prToken $1)) }
-    | Double                        { RExprNode (tokenPosn $1) (Float (read (prToken $1)::Double)) }
+    | Integer                       { RExprNode (tpos $1) (Int (read (prToken $1)::Integer)) }
+    | Char                          { RExprNode (tpos $1) (Char (head (tail(prToken $1)))) }
+    | String                        { RExprNode (tpos $1) (String (prToken $1)) }
+    | Double                        { RExprNode (tpos $1) (Float (read (prToken $1)::Double)) }
     | 'true'                        { RExprNode (tpos $1) (Bool Boolean_True) }
     | 'false'                       { RExprNode (tpos $1) (Bool Boolean_False) }
     | '(' RExpr ')'                 { $2 }
@@ -118,15 +118,16 @@ RExpr :: {AbsNode}
 
 LExpr :: {AbsNode} 
     : '*' RExpr                     { LExprNode (tpos $1) (Deref $2) }
-    | '++' LExpr                    { LExprNode (tpos $1) (PreInc $2) }
-    | '--' LExpr                    { LExprNode (tpos $1) (PreDecr $2) }
-    | LExpr '++'                    { LExprNode (pos $1) (PostInc $1) }
-    | LExpr '--'                    { LExprNode (pos $1) (PostDecr $1) }
+    | '++' LExpr                    { LExprNode (tpos $1) (PreIncrDecr $2 "+") }
+    | '--' LExpr                    { LExprNode (tpos $1) (PreIncrDecr $2 "-") }
+    | LExpr '++'                    { LExprNode (pos $1) (PostIncrDecr $1 "+") }
+    -- TODO sistemare il post incremento per l-value
+    | LExpr '--'                    { LExprNode (pos $1) (PostIncrDecr $1 "-") }
     | '(' LExpr ')'                 { $2 }
     | BLExpr                        { LExprNode (pos $1) (BasLExpr $1) }
 
 FunCall :: {AbsNode} 
-    : Ident '(' ListRExpr ')'       { FunCallNode (tokenPosn $1) (Call (Ident (prToken $1)) $3) }
+    : Ident '(' ListRExpr ')'       { FunCallNode (tpos $1) (Call (Ident (prToken $1)) $3) }
 
 ListRExpr :: {[AbsNode]} 
     : {- empty -}                   { [] }
@@ -134,8 +135,8 @@ ListRExpr :: {[AbsNode]}
     | RExpr ',' ListRExpr           { (:) $1 $3 }
 
 BLExpr :: {AbsNode} 
-    : BLExpr '(' RExpr ')'          { BLExprNode (pos $1) (ArrayEl $1 $3) }
-    | Ident                         { BLExprNode (tokenPosn $1) (Id (Ident (prToken $1))) }
+    : BLExpr '[' RExpr ']'          { BLExprNode (pos $1) (ArrayEl $1 $3) }
+    | Ident                         { BLExprNode (tpos $1) (Id (Ident (prToken $1))) }
 
 Program :: {AbsNode} 
     : ListDecl                      { ProgramNode (Pn 1 1) (Prog (reverse $1)) }
@@ -154,8 +155,8 @@ TypeSpec :: {AbsNode}
     | CompoundType                          { TypeSpecNode (pos $1) (CompType $1) }
 
 CompoundType :: {AbsNode} 
-    : 'array' '[' TypeSpec ']' '(' Integer ')'      { CompoundTypeNode (tpos $1) (ArrDef $3 (read (prToken $6)::Integer)) }
-    | 'array' '[' TypeSpec ']'                      { CompoundTypeNode (tpos $1) (ArrUnDef $3) }
+    : 'array' '[' TypeSpec ']' '(' Integer ')'      { CompoundTypeNode (tpos $1) (ArrDef $3 (Just (read (prToken $6)::Integer))) }
+    | 'array' '[' TypeSpec ']'                      { CompoundTypeNode (tpos $1) (ArrDef $3 Nothing) }
     | '*' TypeSpec                                  { CompoundTypeNode (tpos $1) (Pointer $2) }
 
 ComplexRExpr :: {AbsNode} 
@@ -201,10 +202,10 @@ Stmt :: {AbsNode}
 
 Assignment_op :: {AbsNode} 
     : '='                                  { Assignment_opNode (tpos $1) Assign }
-    | '*='                                 { Assignment_opNode (tpos $1) AssgnMul }
-    | '+='                                 { Assignment_opNode (tpos $1) AssgnAdd }
-    | '/='                                 { Assignment_opNode (tpos $1) AssgnDiv }
-    | '-='                                 { Assignment_opNode (tpos $1) AssgnSub }
+    | '*='                                 { Assignment_opNode (tpos $1) (AssignOp "*") }
+    | '+='                                 { Assignment_opNode (tpos $1) (AssignOp "+") }
+    | '/='                                 { Assignment_opNode (tpos $1) (AssignOp "/") }
+    | '-='                                 { Assignment_opNode (tpos $1) (AssignOp "-") }
 
 JumpStmt :: {AbsNode} 
     : 'break'                              { JumpStmtNode (tpos $1) Break }
@@ -276,10 +277,8 @@ data FunCall
 
 data LExpr
     = Deref AbsNode
-    | PreInc AbsNode
-    | PreDecr AbsNode
-    | PostInc AbsNode
-    | PostDecr AbsNode
+    | PreIncrDecr AbsNode String
+    | PostIncrDecr AbsNode String
     | BasLExpr AbsNode
     deriving (Eq, Ord, Show)
 
@@ -308,8 +307,7 @@ data BasicType
     deriving (Eq, Ord, Show, Read)
 
 data CompoundType
-    = ArrDef AbsNode Integer
-    | ArrUnDef AbsNode
+    = ArrDef AbsNode (Maybe Integer)
     | Pointer AbsNode
     deriving (Eq, Ord, Show)
 
@@ -350,13 +348,7 @@ data Stmt
 
 data Assignment_op 
     = Assign
-    | AssgnMul
-    | AssgnAdd
-    | AssgnDiv
-    | AssgnSub
-    | AssgnPow
-    | AssgnAnd
-    | AssgnOr
+    | AssignOp String
     deriving (Eq, Ord, Show, Read)
 
 data JumpStmt 
