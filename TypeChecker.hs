@@ -43,8 +43,10 @@ data Type
     | TypeError String
     deriving (Eq, Show, Read)
 
--- TODO array
 -- TODO pointer
+-- TODO for
+-- TODO if
+-- TODO while
 
 ------------------------------------------------------------
 --------- Enviroment Utilities -----------------------------
@@ -91,6 +93,9 @@ pushToEnvFuncParams ((ParameterNode _ (Param modality ident tp)):params) = do
 ------------------------------------------------------------
 --------- Utilities ----------------------------------------
 ------------------------------------------------------------
+
+isArray :: Err Type -> Bool
+isArray tp = "Array" == (type2string $ getType tp)
 
 serializeEnvParameters :: [AbsNode] -> [Type]
 serializeEnvParameters [] = []
@@ -377,9 +382,14 @@ check_StmtNode (StmtNode _ node) = do
             -- TODO if aritm operations check to be int or floats
             case lExpr1 of
                 Ok tp -> case rExpr1 of
-                    Ok tp -> case (checkTypes lExpr1 rExpr1) of
-                        Ok tp -> do return ()
-                        Bad msg -> setError $ (getNodeInfo rExpr) ++ msg 
+                    Ok tp -> do
+                        if (isArray lExpr1 || isArray rExpr1)
+                        then do return() -- TODO add more complex checking
+                        else
+                            case (checkTypes lExpr1 rExpr1) of
+                                Ok tp -> do return ()
+                                Bad msg -> setError $ (getNodeInfo rExpr) ++ msg 
+                        return ()
                     Bad msg -> setError $ (getNodeInfo rExpr) ++ msg
                 Bad msg -> setError $ (getNodeInfo lExpr) ++ msg 
             return ()
@@ -474,7 +484,7 @@ get_LExpr node env = case node of
 
 get_BLExpr :: BLExpr -> Enviroment -> Err Type
 get_BLExpr node env = case node of
-    ArrayEl bLExpr rExpr -> checkTypesFakeSafe -- TODO
+    ArrayEl bLExpr rExpr -> get_BLExprNode bLExpr env
     Id ident -> checkIdentType (getIdent ident) env
 
 ------------------------------------------------------------

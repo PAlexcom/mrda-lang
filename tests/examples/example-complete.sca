@@ -1,4 +1,5 @@
 // Basic Declaration
+var c: Char = 'c';
 val c: Int = 5 + 6;
 var x: Int = 5 + 6;
 var y: Int = 5 * 4;
@@ -6,6 +7,7 @@ var z: Int = 5 / 4;
 
 // Compound Declaration
 var s: Array[Array[Char](2)](2) = Array(Array('a', 'b'), Array('a', 'b'));
+var i: Array[Array[Int](2)](2) = Array(Array(1+2,3), Array(5+3/7,1));
 var a: Boolean = true;
 
 def proc(valres c: Int, b: Boolean): Int = {
@@ -18,6 +20,8 @@ def func(a: Int, b: Boolean, d: Char, n: Float, l: Boolean, m: Array[Array[Char]
     var counter: Int = a;
     var z: Int = proc(counter, b);
     counter = a;
+    counter += a;
+    x = ++x + x;
 
     // Iteration Statement
     while (b == true) {
@@ -36,6 +40,12 @@ def func(a: Int, b: Boolean, d: Char, n: Float, l: Boolean, m: Array[Array[Char]
     // Left Expression Declaration
     ++counter;
     --counter;
+
+    y-- = x;
+
+    s[1][2];
+    d = s[1][1];
+    s[1][0] = 'a';
 
     // Jump Statement
     return (1+1);
