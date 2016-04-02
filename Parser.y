@@ -64,7 +64,7 @@ import Error
     '{'         { Token _ (TokenSymbols "{") }
     '}'         { Token _ (TokenSymbols "}") }
     '||'        { Token _ (TokenSymbols "||") }
-    Integer     { Token _ (TokenInt _) }
+    Int         { Token _ (TokenInt _) }
     Char        { Token _ (TokenChar _) }
     String      { Token _ (TokenAlpha _) }
     Double      { Token _ (TokenDouble _) }
@@ -107,7 +107,7 @@ RExpr :: {AbsNode}
     | '-' RExpr %prec NEG           { RExprNode (tpos $1) (Neg $2) }
     | '&' LExpr                     { RExprNode (tpos $1) (Ref $2) }
     | FunCall                       { RExprNode (pos $1) (FCall $1) }
-    | Integer                       { RExprNode (tpos $1) (Int (read (prToken $1)::Integer)) }
+    | Int                           { RExprNode (tpos $1) (Int (read (prToken $1)::Int)) }
     | Char                          { RExprNode (tpos $1) (Char (head (tail(prToken $1)))) }
     | String                        { RExprNode (tpos $1) (String (prToken $1)) }
     | Double                        { RExprNode (tpos $1) (Float (read (prToken $1)::Double)) }
@@ -155,7 +155,7 @@ TypeSpec :: {AbsNode}
     | CompoundType                          { TypeSpecNode (pos $1) (CompType $1) }
 
 CompoundType :: {AbsNode} 
-    : 'array' '[' TypeSpec ']' '(' Integer ')'      { CompoundTypeNode (tpos $1) (ArrDef $3 (Just (read (prToken $6)::Integer))) }
+    : 'array' '[' TypeSpec ']' '(' Int ')'          { CompoundTypeNode (tpos $1) (ArrDef $3 (Just (read (prToken $6)::Int))) }
     | 'array' '[' TypeSpec ']'                      { CompoundTypeNode (tpos $1) (ArrDef $3 Nothing) }
     | '*' TypeSpec                                  { CompoundTypeNode (tpos $1) (Pointer $2) }
 
@@ -171,7 +171,7 @@ ListParameter :: {[AbsNode]}
     | Parameter                             { (:[]) $1 }
     | Parameter ',' ListParameter           { (:) $1 $3 }
 
-Parameter :: {AbsNode} 
+Parameter :: {AbsNode}
     : ModalityParam Ident ':' TypeSpec      { ParameterNode (pos $1) (Param $1 (Ident (prToken $2)) $4) }
 
 ModalityDecl :: {AbsNode}
@@ -273,7 +273,7 @@ data RExpr
     | Neg AbsNode
     | Ref AbsNode
     | FCall AbsNode
-    | Int Integer
+    | Int Int
     | Char Char
     | String String
     | Float Double
@@ -307,7 +307,7 @@ data BasicType
     deriving (Eq, Ord, Show, Read)
 
 data CompoundType
-    = ArrDef AbsNode (Maybe Integer)
+    = ArrDef AbsNode (Maybe Int)
     | Pointer AbsNode
     deriving (Eq, Ord, Show)
 

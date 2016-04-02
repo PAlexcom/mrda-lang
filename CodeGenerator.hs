@@ -50,7 +50,7 @@ data ArrayAttr = ArrayAttr {
         base :: String, 
         tp :: Type, 
         tpElem :: Type,
-        tpElemWidth :: Integer 
+        tpElemWidth :: Int
     }
     deriving (Show, Eq)
 
@@ -64,7 +64,7 @@ data Type
     | TypeFloat
     | TypeString
     | TypeUnit
-    | TypeArray Type (Maybe Integer)
+    | TypeArray Type (Maybe Int)
     | TypePointer Type
     | TypeError String
     deriving (Eq, Show, Read)
@@ -123,7 +123,7 @@ getTypeSpec (TypeSpecNode _ typeSpec) = case typeSpec of
         ArrDef typeSpecNode Nothing     -> TypeArray (getTypeSpec typeSpecNode) Nothing
         Pointer typeSpecNode            -> TypePointer (getTypeSpec typeSpecNode)
 
-getDimType :: Type -> Integer 
+getDimType :: Type -> Int
 getDimType tp = case tp of
     TypeBool    -> 1
     TypeChar    -> 16
@@ -134,7 +134,7 @@ getDimType tp = case tp of
     TypeArray tpa _ -> getDimType tpa
     TypePointer _ -> 32 
 
-getArrayDimType :: Type -> Integer
+getArrayDimType :: Type -> Int
 getArrayDimType tp = case tp of
     TypeBool    -> 1
     TypeChar    -> 16
@@ -270,7 +270,7 @@ code_Decl (DeclNode _ decl) = case decl of
         addTAC $ TACPreamble "EndFunc"
         return ()
 
-code_DeclArray :: String -> Integer -> [AbsNode] -> Integer -> State Attributes ()
+code_DeclArray :: String -> Int -> [AbsNode] -> Int -> State Attributes ()
 code_DeclArray base dimElems (rExpr:rExprs) offset = do
     (code_RExpr rExpr)
     addr_RExpr <- gets addr
@@ -544,8 +544,8 @@ code_RExpr (RExprNode _ rExpr) = case rExpr of
     FCall funCall -> do
         code_FunCall funCall
         return ()
-    Int integer -> do
-        modify (\attr -> attr{addr = (show integer)})
+    Int int -> do
+        modify (\attr -> attr{addr = (show int)})
         return ()
     Char char -> do
         modify (\attr -> attr{addr = ("\'" ++ (char:[]) ++ "\'")})

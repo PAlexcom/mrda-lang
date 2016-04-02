@@ -116,14 +116,22 @@ getBasicTypeSafe :: BasicType -> Err Type
 getBasicTypeSafe tp = Ok (getBasicType tp)
 
 getTypeSpecSafe :: TypeSpec -> Err Type
-getTypeSpecSafe node = case node of
-    BasTyp node -> get_BasicTypeNode node
-    CompType node -> get_CompoundTypeNode node
+getTypeSpecSafe node = Ok (getTypeSpec node)
+
+getTypeSpec :: TypeSpec -> Type
+getTypeSpec node = case node of
+    BasTyp (BasicTypeNode _ node) -> getBasicType node
+    CompType (CompoundTypeNode _ node) -> getCompoundType node
 
 getCompoundTypeSafe :: CompoundType -> Err Type
-getCompoundTypeSafe node = case node of
-    ArrDef typeSpec integer -> checkTypesFakeSafe -- TODO
-    Pointer typeSpec -> checkTypesFakeSafe -- TODO
+getCompoundTypeSafe node = Ok (getCompoundType node)
+
+getCompoundType :: CompoundType -> Type
+getCompoundType node = case node of
+    ArrDef (TypeSpecNode _ typeSpec) int -> case int of 
+        Just dim -> TypeArray (getTypeSpec typeSpec) dim
+        Nothing ->  TypeArray (getTypeSpec typeSpec) 0
+    Pointer typeSpec -> checkTypesFake -- TODO
 
 type2string :: Type -> String
 type2string tp = case tp of
@@ -221,7 +229,10 @@ isIdentInVars name ((VarElem ident tp _):vars) = if (name == ident)
     else isIdentInVars name vars
 
 checkTypesFakeSafe :: Err Type
-checkTypesFakeSafe = Ok TypeUnit
+checkTypesFakeSafe = Ok (checkTypesFake)
+
+checkTypesFake :: Type
+checkTypesFake = TypeUnit
 
 getFunctionType :: FunCall -> Enviroment -> Err Type
 getFunctionType (Call ident rExprsNode) env = isFunCallGood (getIdent ident) rExprsNode env
@@ -363,7 +374,7 @@ check_StmtNode (StmtNode _ node) = do
         Sel selectionStmt -> do
             return ()
         Assgn lExpr assignment_op rExpr -> do
-            -- TODO if aritm operations check to be integers or floats
+            -- TODO if aritm operations check to be int or floats
             case lExpr1 of
                 Ok tp -> case rExpr1 of
                     Ok tp -> case (checkTypes lExpr1 rExpr1) of
@@ -410,7 +421,15 @@ get_RExprsNode (rExprNode:rExprsNode) (param:params) env = case (get_RExprNode r
 get_ComplexRExpr :: ComplexRExpr -> Enviroment -> Err Type
 get_ComplexRExpr node env = case node of
     Simple rExprNode -> get_RExprNode rExprNode env
-    Array complexRExprNode -> checkTypesFakeSafe
+    Array (x:xs) -> case (get_ComplexRExprList xs (get_ComplexRExprNode x env) env) of
+        Ok tp -> Ok (TypeArray tp ((length xs) + 1))
+        Bad msg -> Bad msg
+
+get_ComplexRExprList :: [AbsNode] -> Err Type -> Enviroment -> Err Type
+get_ComplexRExprList [] tpLeft env = tpLeft
+get_ComplexRExprList ((ComplexRExprNode _ complexRExpr):xs) tpLeft env = case (checkTypes tpLeft (get_ComplexRExpr complexRExpr env)) of
+    Ok tp -> get_ComplexRExprList xs tpLeft env
+    Bad msg -> Bad msg
 
 get_RExpr :: RExpr -> Enviroment -> Err Type
 get_RExpr node env = case node of
@@ -430,7 +449,7 @@ get_RExpr node env = case node of
     Neg rExpr -> get_RExprNode rExpr env
     Ref lExpr -> get_LExprNode lExpr env
     FCall funCall -> get_FunCallNode funCall env
-    Int integer -> Ok TypeInt
+    Int int -> Ok TypeInt
     Char char -> Ok TypeChar
     String string -> Ok TypeString
     Float double -> Ok TypeFloat
