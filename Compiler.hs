@@ -25,23 +25,23 @@ compile fileName text = do
             print abst
             --putStrLn "-----------------------\n ABS Pretty Printer \n-----------------------"
             --putStrLn $ prettyPrintABS abst
-            putStrLn "-----------------------\n Type Checking \n-----------------------"
-            print typeCheckingReport
-            case isTypeCheckOk of
-                Ok _ -> do
-                    putStrLn "-----------------------\n OK | Type Checking \n-----------------------"
-                    putStrLn "-----------------------\n TAC \n-----------------------"
-                    print tacAttr
-                    putStrLn "-----------------------\n TAC Source Code \n-----------------------"
-                    putStrLn $ code tacAttr
-            --        putStrLn "-----------------------\n TAC Pretty Printer \n-----------------------"
-            --        putStrLn $ prettyPrintTAC $ tac tacAttr
-                    where
-                        tacAttr = tacGenerator abst
-                Bad msg -> putStrLn ("-----------------------\n!!! Error => " ++ msg ++ " \n-----------------------")
+            --putStrLn "-----------------------\n Type Checking \n-----------------------"
+            --print typeCheckingReport
+            --case isTypeCheckOk of
+            --    Ok _ -> do
+            --        putStrLn "-----------------------\n OK | Type Checking \n-----------------------"
+            --        putStrLn "-----------------------\n TAC \n-----------------------"
+            --        print tacAttr
+            putStrLn "-----------------------\n TAC Source Code \n-----------------------"
+            putStrLn $ code tacAttr
+    --        putStrLn "-----------------------\n TAC Pretty Printer \n-----------------------"
+    --        putStrLn $ prettyPrintTAC $ tac tacAttr
             where
-                typeCheckingReport = typeChecking abst
-                isTypeCheckOk = isError typeCheckingReport
+                tacAttr = tacGenerator abst
+                --Bad msg -> putStrLn ("-----------------------\n!!! Error => " ++ msg ++ " \n-----------------------")
+            --where
+            --    typeCheckingReport = typeChecking abst
+            --    isTypeCheckOk = isError typeCheckingReport
     return ()
     where
         tokens = parseTokens text

@@ -29,7 +29,10 @@ defaultAttributes = Attributes  ""                                      -- code
                                 ""                                      -- next
                                 ""                                      -- exit
                                 False                                   -- isSelection
-                                (ArrayAttr "" "" TypeUnit TypeUnit 0) -- array
+                                (ArrayAttr "" "" TypeUnit TypeUnit 0)   -- array
+
+predefinedFunce = ["writeInt","writeFloat","writeChar","writeString",
+                        "readInt","readFloat","readChar","readString"]
 
 ------------------------------------------------------------
 ----------------------- ENVIRONMENT ------------------------
@@ -40,7 +43,7 @@ data EnviromentTAC
         vars :: [(String, String)],           -- couple (ident, label)
         arrays :: [ArrayElemTAC],
         pointers :: [(String, String)],
-        funcs :: [(String, String)],
+        funcs :: [FuncElemTAC],
         parent :: Maybe EnviromentTAC
     }
     deriving (Show)
@@ -54,7 +57,13 @@ data ArrayAttr = ArrayAttr {
     }
     deriving (Show, Eq)
 
-data ArrayElemTAC = ArrayElemTAC {ident :: String, label :: String, tpa :: Type}
+data ArrayElemTAC = ArrayElemTAC {idA :: String, tempA :: String, tpA :: Type}
+    deriving (Eq, Show)
+
+data FuncElemTAC = FuncElemTAC {idF :: String, labF :: String, parF :: [ParamElemTAC]}
+    deriving (Eq, Show)
+
+data ParamElemTAC = ParamElemTAC {idP :: String, tempP :: String, modP :: ModalityParam}
     deriving (Eq, Show)
 
 data Type 
@@ -66,8 +75,20 @@ data Type
     | TypeUnit
     | TypeArray Type (Maybe Integer)
     | TypePointer Type
-    | TypeError String
     deriving (Eq, Show, Read)
+
+setNewEnv :: State Attributes ()
+setNewEnv = do
+    currentEnv <- gets env
+    modify (\attr -> attr {env = (EnvTAC {vars = [], arrays = [], pointers = [], funcs = [], parent = Just currentEnv})})
+    return ()
+
+setOldEnv :: State Attributes ()
+setOldEnv = do
+    currentEnv <- gets env
+    case (parent currentEnv) of
+        Just parentEnv -> modify (\attr -> attr {env = parentEnv})
+    return ()
 
 pushVarToEnv :: (String,String) -> State Attributes ()
 pushVarToEnv envElem = do
@@ -87,7 +108,7 @@ pushPointerToEnv envElem = do
     modify (\attr -> attr {env = currentEnv {pointers = envElem : (pointers currentEnv)}})
     return ()
 
-pushFuncToEnv :: (String,String) -> State Attributes ()
+pushFuncToEnv :: FuncElemTAC -> State Attributes ()
 pushFuncToEnv envElem = do
     currentEnv <- gets env
     modify (\attr -> attr {env = currentEnv {funcs = envElem : (funcs currentEnv)}})
@@ -108,6 +129,22 @@ isArrayInArrays arrayName [] = Nothing
 isArrayInArrays arrayName ((ArrayElemTAC ident label tpa):arrays) = if arrayName == ident
     then Just (ArrayElemTAC ident label tpa)
     else isArrayInArrays arrayName arrays
+
+isFuncInEnv :: String -> EnviromentTAC -> Maybe FuncElemTAC
+isFuncInEnv funcName env = case match of
+    Just funcElem -> Just funcElem
+    Nothing -> case parentEnv of
+        Just parent -> isFuncInEnv funcName parent
+        Nothing -> Nothing
+    where
+        parentEnv = parent env
+        match = isFuncInFuncs funcName (funcs env)
+
+isFuncInFuncs :: String -> [FuncElemTAC] -> Maybe FuncElemTAC
+isFuncInFuncs funcName [] = Nothing
+isFuncInFuncs funcName ((FuncElemTAC ident label par):funcs) = if funcName == ident
+    then Just (FuncElemTAC ident label par)
+    else isFuncInFuncs funcName funcs
 
 getTypeSpec :: AbsNode -> Type
 getTypeSpec (TypeSpecNode _ typeSpec) = case typeSpec of
@@ -194,7 +231,19 @@ getIdent (Ident ident) = ident
 serializeCompRExprs :: AbsNode -> [AbsNode]
 serializeCompRExprs (ComplexRExprNode _ complexRExpr) = case complexRExpr of
     Simple rExprNode -> [rExprNode]
-    Array complexRExprs -> foldr (++) [] (map (serializeCompRExprs) complexRExprs)  
+    Array complexRExprs -> foldr (++) [] (map (serializeCompRExprs) complexRExprs) 
+
+serializeParams :: [AbsNode] -> State Attributes ([ParamElemTAC])
+serializeParams (param:params) = do
+    temp <- newCounterTemp
+    listParams <- serializeParams params
+    return ((ParamElemTAC ident temp modality):listParams)
+    where
+        ParameterNode _ (Param modalityNode (Ident ident) _) = param
+        ModalityParamNode _ modality = modalityNode
+
+serializeParams [] = do
+    return ([]) 
 
 addCode :: String -> State Attributes ()
 addCode newCode = modify (\attr -> attr{code = (code attr) ++ newCode ++ "\n"})
@@ -218,10 +267,27 @@ newCounterTemp = do
 code_Program :: AbsNode -> State Attributes ()
 code_Program (ProgramNode _ (Prog decls)) = do
     label <- newCounterLab
+    code_PredefinedFuncs predefinedFunce
     code_Decls decls
     addCode $ label ++ ":halt"
     addTAC $ TACLabel label
     addTAC $ TACPreamble "halt"
+    return ()
+
+code_PredefinedFuncs :: [String] -> State Attributes ()
+code_PredefinedFuncs (func:funcs) = do
+    label <- newCounterLab
+    pushFuncToEnv $ FuncElemTAC func label [(ParamElemTAC "" "" ModalityP_val)]
+    addCode $ label ++ ":"
+    addCode "BeginFunc"
+    addTAC $ TACLabel label
+    addTAC $ TACPreamble "BeginFunc"
+    addCode "EndFunc"
+    addTAC $ TACPreamble "EndFunc"
+    code_PredefinedFuncs funcs
+    return ()
+
+code_PredefinedFuncs [] = do
     return ()
 
 code_Decls :: [AbsNode] -> State Attributes ()
@@ -250,8 +316,21 @@ code_Decl (DeclNode _ decl) = case decl of
                 addTAC $ TACAssign temp name
                 code_DeclArray temp dimElems rExprs 0
                 return ()
-            TypePointer _ -> do
-                return ()
+            TypePointer _ -> 
+                case complexRExpr of
+                    ComplexRExprNode _ (Simple rExpr) -> do
+                        (code_RExpr rExpr)
+                        addr_RExpr <- gets addr
+                        case head(addr_RExpr) of
+                            '&' -> do
+                                addCode $ (getIdent ident) ++ "=" ++ addr_RExpr
+                                addTAC $ TACAssign (getIdent ident) addr_RExpr
+                                return ()
+                            _   -> do
+                                addCode $ "*" ++ (getIdent ident) ++ "=" ++ addr_RExpr
+                                addTAC $ TACAssign ("*" ++ (getIdent ident)) addr_RExpr
+                                return ()
+                        return ()
         where
             name = (getIdent ident)
             typeSpec = (getTypeSpec tp)
@@ -259,7 +338,9 @@ code_Decl (DeclNode _ decl) = case decl of
             rExprs = (serializeCompRExprs complexRExpr)
     Dfun ident parameters _ compStmt returnStmt -> do
         label <- newCounterLab
-        pushFuncToEnv ((getIdent ident),label)
+        params <- serializeParams parameters
+        pushFuncToEnv $ FuncElemTAC (getIdent ident) label params
+        setNewEnv
         addCode $ label ++ ":"
         addCode "BeginFunc"
         addTAC $ TACLabel label
@@ -268,6 +349,7 @@ code_Decl (DeclNode _ decl) = case decl of
         code_ReturnStmt returnStmt
         addCode "EndFunc"
         addTAC $ TACPreamble "EndFunc"
+        setOldEnv
         return ()
 
 code_DeclArray :: String -> Integer -> [AbsNode] -> Integer -> State Attributes ()
@@ -296,13 +378,18 @@ code_ReturnStmt (ReturnStmtNode _ returnStmt) = case returnStmt of
 
 code_CompStmt :: AbsNode -> State Attributes ()
 code_CompStmt (CompStmtNode _ (BlockDecl decls stmts)) = do
+    setNewEnv
     code_Decls decls
     code_Stmts stmts
+    setOldEnv
     return ()
 
 code_Stmts :: [AbsNode] -> State Attributes ()
 code_Stmts (stmt:stmts) = do
+    -- TODO: serve veramente il nuovo ambiente qua??
+    setNewEnv
     code_Stmt stmt
+    setOldEnv
     code_Stmts stmts
     return ()
 
@@ -324,14 +411,14 @@ code_Stmt (StmtNode _ stmt) = case stmt of
         label <- newCounterLab
         modify (\attr -> attr{next = label})
         code_IterStmt iterStmt
-        addCode $ label
+        addCode $ label ++ ":"
         addTAC $ TACLabel label
         return ()
     Sel selectionStmt -> do
         label <- newCounterLab
         modify (\attr -> attr{next = label})
         code_SelectionStmt selectionStmt
-        addCode $ label
+        addCode $ label ++ ":"
         addTAC $ TACLabel label
         return ()
     Assgn lExpr assignment_op rExpr -> do
@@ -340,6 +427,25 @@ code_Stmt (StmtNode _ stmt) = case stmt of
     LExprStmt lExpr -> do
         code_LExpr lExpr
         return ()
+    ExHandler tryCatch -> do
+        code_TryCatch tryCatch
+        return () 
+
+code_TryCatch :: AbsNode -> State Attributes ()
+code_TryCatch (TryCatchStmtNode _ tryCatch) = case tryCatch of
+    TryCatch stmtTry ident stmtCatch -> do
+        nextL <- gets next
+        beginCatch <- newCounterLab
+        beginTry <- newCounterLab
+        addCode $ "goto " ++ beginTry 
+        addCode $ beginCatch ++ ":"
+        (code_Stmt stmtCatch)
+        addCode $ "goto " ++ nextL
+        addCode $ beginTry ++ ":"
+        addCode $ "on exception goto " ++ beginCatch
+        (code_Stmt stmtTry)
+        addCode $ nextL ++ ":"
+        return () 
 
 code_JumpStmt :: AbsNode -> State Attributes ()
 code_JumpStmt (JumpStmtNode _ jumpStmt) = case jumpStmt of
@@ -420,18 +526,45 @@ code_IterStmt (IterStmtNode _ iterStmt) = case iterStmt of
         labelTT <- newCounterLab
         modify (\attr -> attr{ttff = (labelTT, nextL)})
         modify (\attr -> attr{exit = nextL})
-        addCode $ beginL
+        addCode $ beginL ++ ":"
         addTAC $ TACLabel beginL
         modify (\attr -> attr{isSelection = True})
         code_RExpr rExpr
         modify (\attr -> attr{isSelection = False})
         modify (\attr -> attr{next = beginL})
-        addCode $ labelTT
+        addCode $ labelTT ++ ":"
         addTAC $ TACLabel labelTT
         code_Stmt stmt
         addCode $ "goto " ++ beginL
         addTAC $ TACGoto beginL
         return ()
+    For ident start end stmt -> do
+        nextL <- gets next
+        (code_RExpr start)
+        addr_Start <- gets addr
+        (code_RExpr end)
+        addr_End <- gets addr
+        beginL <- newCounterLab
+        labelTT <- newCounterLab
+        modify (\attr -> attr{exit = nextL})
+        ic <- newCounterTemp
+        temp <- newCounterTemp
+        addCode $ temp ++ " = " ++ addr_End ++ " - " ++ addr_Start
+        addCode $ ic ++ " = " ++ temp ++ " + 1"
+        addCode $ var ++ " = " ++ ic 
+        addCode $ beginL ++ ":"
+        addTAC $ TACLabel beginL 
+        addCode $ "if " ++ var ++ "<=" ++ addr_End ++ " goto " ++ labelTT
+        addCode $ "goto " ++ nextL
+        addCode $ labelTT ++ ": "
+        (code_Stmt stmt)
+        addCode $ ic ++ " = " ++ ic ++ " + 1"
+        addCode $ var ++ " = " ++ ic 
+        addCode $ "goto " ++ beginL
+        addTAC $ TACGoto beginL 
+        return ()
+        where 
+            var = getIdent ident
 
 code_SelectionStmt :: AbsNode -> State Attributes ()
 code_SelectionStmt (SelectionStmtNode _ selectionStmt) = case selectionStmt of
@@ -442,7 +575,7 @@ code_SelectionStmt (SelectionStmtNode _ selectionStmt) = case selectionStmt of
         modify (\attr -> attr{isSelection = True})
         code_RExpr rExpr
         modify (\attr -> attr{isSelection = False})
-        addCode $ label
+        addCode $ label ++ ":"
         addTAC $ TACLabel label
         code_Stmt stmt
         return ()
@@ -454,12 +587,12 @@ code_SelectionStmt (SelectionStmtNode _ selectionStmt) = case selectionStmt of
         modify (\attr -> attr{isSelection = True})
         code_RExpr rExpr
         modify (\attr -> attr{isSelection = False})
-        addCode labelTT
+        addCode $ labelTT ++ ":"
         addTAC $ TACLabel labelTT
         code_Stmt stmt1
         addCode $ " goto " ++ nextL
         addTAC $ TACGoto nextL
-        addCode labelFF
+        addCode $ labelFF ++ ":"
         addTAC $ TACLabel labelFF
         code_Stmt stmt2
         return ()
@@ -498,7 +631,7 @@ code_RExpr (RExprNode _ rExpr) = case rExpr of
                     label <- newCounterLab
                     modify (\attr -> attr{ttff = (label,ff)})
                     (code_RExpr rExpr1)
-                    addCode label
+                    addCode $ label ++ ":"
                     addTAC $ TACLabel label
                     modify (\attr -> attr{ttff = (tt,ff)})
                     (code_RExpr rExpr2)
@@ -508,7 +641,7 @@ code_RExpr (RExprNode _ rExpr) = case rExpr of
                     label <- newCounterLab
                     modify (\attr -> attr{ttff = (tt,label)})
                     (code_RExpr rExpr1)
-                    addCode label
+                    addCode $ label ++ ":"
                     addTAC $ TACLabel label
                     modify (\attr -> attr{ttff = (tt,ff)})
                     (code_RExpr rExpr2)
@@ -540,6 +673,8 @@ code_RExpr (RExprNode _ rExpr) = case rExpr of
         addTAC $ TACUnaryOp addrAttr "-" addr_RExpr
         return ()
     Ref lExpr -> do
+        (code_LExpr lExpr)
+        modify (\attr -> attr{addr = "&" ++ (addr attr)})
         return ()
     FCall funCall -> do
         code_FunCall funCall
@@ -593,6 +728,8 @@ code_RExpr (RExprNode _ rExpr) = case rExpr of
 code_LExpr :: AbsNode -> State Attributes ()
 code_LExpr (LExprNode _ lExpr) = case lExpr of
     Deref rExpr -> do
+        (code_RExpr rExpr)
+        modify (\attr -> attr{addr = "*" ++ (addr attr)})
         return ()
     PreIncrDecr lExpr op -> do
         code_LExpr lExpr
