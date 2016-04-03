@@ -43,10 +43,7 @@ data Type
     | TypeError String
     deriving (Eq, Show, Read)
 
--- TODO for
 -- TODO if
--- TODO while
--- TODO primitive functions
 -- TODO try catch
 -- TODO val
 
@@ -226,7 +223,11 @@ checkAritmType tp = if (tp == (Ok TypeInt)) || (tp == (Ok TypeFloat))
     else Bad "Incorect type declaration, must be 'Int' or 'Float'"
 
 checkRelTypes :: Err Type -> Err Type -> Err Type
-checkRelTypes first second = checkAritmTypes first second
+checkRelTypes first second = case (checkAritmTypes first second) of
+    Ok tp -> Ok tp
+    Bad msg1 -> case (checkBoolTypes first second) of
+        Ok tp -> Ok tp
+        Bad msg2 -> Bad (msg1 ++ " or " ++ msg2)
 
 checkIdentType :: String -> Enviroment -> Err Type
 checkIdentType name env = case (isIdentInEnv name env) of
@@ -250,12 +251,6 @@ isIdentInVars name [] = Nothing
 isIdentInVars name ((VarElem ident tp _):vars) = if (name == ident)
     then Just tp
     else isIdentInVars name vars
-
-checkTypesFakeSafe :: Err Type
-checkTypesFakeSafe = Ok (checkTypesFake)
-
-checkTypesFake :: Type
-checkTypesFake = TypeUnit
 
 getFunctionType :: FunCall -> Enviroment -> Err Type
 getFunctionType (Call ident rExprsNode) env = isFunCallGood (getIdent ident) rExprsNode env
@@ -338,7 +333,6 @@ check_Decl node = case node of
         return ()
         where
             tp = get_BasicTypeNode basicTypeNode
-    -- TODO handle array and pointer cases
     DvarCInit modalityDeclNode ident typeSpecNode complexRExprNode -> do
         env <- gets env
         case (checkTypes tp (get_ComplexRExprNode complexRExprNode env)) of
@@ -406,6 +400,7 @@ check_StmtNode (StmtNode _ node) = do
         Jmp jumpStmt -> do
             return ()
         Iter iterStmt -> do
+            check_IterStmtNode iterStmt
             return ()
         Sel selectionStmt -> do
             return ()
@@ -413,7 +408,8 @@ check_StmtNode (StmtNode _ node) = do
             case lExpr1 of
                 Ok tp -> case rExpr1 of
                     Ok tp -> case (checkTypes lExpr1 rExpr1) of
-                        Ok tp -> case (assignment_op) of -- Check if it should be an aritmetic type
+                        -- Check if it should be an aritmetic type
+                        Ok tp -> case (assignment_op) of
                             (Assign) -> do return ()
                             (AssignOp _) -> case (checkAritmTypes lExpr1 rExpr1) of
                                 Ok tp -> do return ()
@@ -436,6 +432,33 @@ check_StmtNode (StmtNode _ node) = do
                 tplExpr = get_LExprNode lExpr env
         ExHandler _ -> do
             return ()
+
+check_IterStmtNode :: AbsNode -> State Attributes ()
+check_IterStmtNode (IterStmtNode _ node) = do
+    env <- gets env
+    case node of
+        While rExpr stmt -> case (get_RExprNode rExpr env) of
+            Ok tp -> check_StmtNode stmt
+            Bad msg -> setError $ (getNodeInfo rExpr) ++ msg
+        DoWhile stmt rExpr -> case (get_RExprNode rExpr env) of
+            Ok tp -> check_StmtNode stmt
+            Bad msg -> setError $ (getNodeInfo rExpr) ++ msg
+        For ident rExpr1 rExpr2 stmt -> case identType of
+            Ok tp -> case rExpr1Type of
+                Ok tp -> case (checkAritmType (Ok tp)) of
+                    Ok tp -> case rExpr2Type of
+                        Ok tp -> case (checkAritmType rExpr2Type) of
+                            Ok tp -> check_StmtNode stmt
+                            Bad msg -> setError $ (getNodeInfo rExpr2) ++ msg 
+                        Bad msg -> setError $ (getNodeInfo rExpr2) ++ msg 
+                    Bad msg -> setError $ (getNodeInfo rExpr1) ++ msg  
+                Bad msg -> setError $ (getNodeInfo rExpr1) ++ msg
+            Bad msg -> setError msg
+            where
+                identType = checkIdentType (getIdent ident) env
+                rExpr1Type = get_RExprNode rExpr1 env
+                rExpr2Type = get_RExprNode rExpr2 env
+    return ()
 
 check_FunCall :: FunCall -> State Attributes ()
 check_FunCall (Call ident rExprs) = do
@@ -474,7 +497,9 @@ get_ComplexRExprList ((ComplexRExprNode _ complexRExpr):xs) tpLeft env = case (c
 
 get_RExpr :: RExpr -> Enviroment -> Err Type
 get_RExpr node env = case node of
-    OpRelation rExpr1 rExpr2 _ -> checkRelTypes tp1 tp2
+    OpRelation rExpr1 rExpr2 _ -> case (checkRelTypes tp1 tp2) of
+        Ok tp -> Ok TypeBoolean
+        Bad msg -> Bad msg
         where
             tp1 = get_RExprNode rExpr1 env
             tp2 = get_RExprNode rExpr2 env
@@ -543,7 +568,6 @@ checkBLExprRExprs left right counter env = case (get_RExpr right env) of
             Id ident -> (checkIdentType (getIdent ident) env, counter)
         Ok tp -> (Bad "array index must be of type Int", counter)
         Bad msg -> (Bad msg, counter)
-
 
 ------------------------------------------------------------
 --------- Parser AbsNode -----------------------------------
