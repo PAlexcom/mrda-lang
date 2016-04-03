@@ -100,6 +100,17 @@ pushToEnvFuncParams ((ParameterNode _ (Param modality ident tp)):params) = do
 isArray :: Err Type -> Bool
 isArray tp = "Array" == (type2string $ getType tp)
 
+isPointer :: Err Type -> Bool
+isPointer tp = "Pointer" == (type2string $ getType tp)
+
+getPointerType :: Err Type -> Err Type
+getPointerType (Ok (TypePointer tp)) = Ok tp
+
+getArrayType :: Err Type -> Err Type
+getArrayType (Ok (TypeArray tp _)) = if (isArray (Ok tp))
+    then getArrayType (Ok tp)
+    else (Ok tp)
+
 serializeEnvParameters :: [AbsNode] -> [Type]
 serializeEnvParameters [] = []
 serializeEnvParameters ((ParameterNode _ (Param _ _ tpNode)):params)
@@ -139,7 +150,7 @@ getCompoundType node = case node of
     ArrDef (TypeSpecNode _ typeSpec) int -> case int of 
         Just dim -> TypeArray (getTypeSpec typeSpec) dim
         Nothing ->  TypeArray (getTypeSpec typeSpec) 0
-    Pointer typeSpec -> checkTypesFake -- TODO
+    Pointer (TypeSpecNode _ typeSpec) -> TypePointer (getTypeSpec typeSpec)
 
 type2string :: Type -> String
 type2string tp = case tp of
@@ -197,6 +208,11 @@ checkBoolTypes first second = case (checkTypes first second) of
         then Ok tp
         else Bad ("error type: must be of type 'bool'")
     Bad msg -> Bad msg
+
+checkBoolType :: Err Type -> Err Type
+checkBoolType (Ok tp) = if (tp == TypeBoolean)
+    then Ok tp
+    else Bad ("error type: must be of type 'bool'")
 
 checkAritmTypes :: Err Type -> Err Type -> Err Type
 checkAritmTypes first second = case (checkAritmType first) of
@@ -381,20 +397,18 @@ check_StmtNode (StmtNode _ node) = do
             return ()
         Sel selectionStmt -> do
             return ()
-        Assgn lExpr assignment_op rExpr -> do
-            -- TODO if aritm operations check to be int or floats
+        Assgn lExpr (Assignment_opNode _ assignment_op) rExpr -> do
             case lExpr1 of
                 Ok tp -> case rExpr1 of
-                    Ok tp -> do
-                        if (isArray lExpr1 || isArray rExpr1)
-                        then do return() -- TODO add more complex checking
-                        else
-                            case (checkTypes lExpr1 rExpr1) of
+                    Ok tp -> case (checkTypes lExpr1 rExpr1) of
+                        Ok tp -> case (assignment_op) of -- Check if it should be an aritmetic type
+                            (Assign) -> do return ()
+                            (AssignOp _) -> case (checkAritmTypes lExpr1 rExpr1) of
                                 Ok tp -> do return ()
-                                Bad msg -> setError $ (getNodeInfo rExpr) ++ msg 
-                        return ()
+                                Bad msg -> setError $ msg
+                        Bad msg -> setError $ msg
                     Bad msg -> setError $ (getNodeInfo rExpr) ++ msg
-                Bad msg -> setError $ (getNodeInfo lExpr) ++ msg 
+                Bad msg -> setError $ (getNodeInfo lExpr) ++ msg
             return ()
             where
                 lExpr1 = get_LExprNode lExpr env
@@ -408,6 +422,8 @@ check_StmtNode (StmtNode _ node) = do
                     return ()
             where
                 tplExpr = get_LExprNode lExpr env
+        ExHandler _ -> do
+            return ()
 
 check_FunCall :: FunCall -> State Attributes ()
 check_FunCall (Call ident rExprs) = do
@@ -458,9 +474,13 @@ get_RExpr node env = case node of
         where
             tp1 = get_RExprNode rExpr1 env
             tp2 = get_RExprNode rExpr2 env
-    Not rExpr -> get_RExprNode rExpr env
-    Neg rExpr -> get_RExprNode rExpr env
-    Ref lExpr -> get_LExprNode lExpr env
+    Not rExpr -> checkBoolType (get_RExprNode rExpr env)
+    Neg rExpr -> checkAritmType (get_RExprNode rExpr env)
+    Ref lExpr -> case (lExpr1) of
+        Ok tp -> Ok (TypePointer tp)
+        Bad msg -> Bad msg
+        where 
+            lExpr1 = get_LExprNode lExpr env
     FCall funCall -> get_FunCallNode funCall env
     Int int -> Ok TypeInt
     Char char -> Ok TypeChar
@@ -471,10 +491,10 @@ get_RExpr node env = case node of
 
 get_LExpr :: LExpr -> Enviroment -> Err Type
 get_LExpr node env = case node of
-    Deref rExpr -> case tpRExpr of
-        Ok tp -> checkAritmType tpRExpr
+    Deref rExpr -> case (get_RExprNode rExpr env) of
+        Ok (TypePointer tp) -> Ok tp
+        Ok _ -> Bad "expression is not a pointer"
         Bad msg -> Bad msg
-        where tpRExpr = get_RExprNode rExpr env
     PreIncrDecr lExpr _ -> case tpLExpr of
         Ok tp -> checkAritmType tpLExpr
         Bad msg -> Bad msg
@@ -487,8 +507,31 @@ get_LExpr node env = case node of
 
 get_BLExpr :: BLExpr -> Enviroment -> Err Type
 get_BLExpr node env = case node of
-    ArrayEl bLExpr rExpr -> get_BLExprNode bLExpr env
+    ArrayEl (BLExprNode _ bLExpr) (RExprNode _ rExpr) -> case (identType) of
+        (Ok tp, counter) -> case (unMountArrayType (Ok tp) counter) of
+            Ok tp -> Ok tp
+            Bad msg -> Bad msg
+        (Bad msg, _) -> Bad msg
+        where
+            identType = checkBLExprRExprs bLExpr rExpr 1 env
     Id ident -> checkIdentType (getIdent ident) env
+
+unMountArrayType :: Err Type -> Int -> Err Type
+unMountArrayType (Ok identType) counter = if (counter > 0)
+    then if (isArray (Ok identType))
+        then case (identType) of
+            TypeArray tp int -> unMountArrayType (Ok tp) (counter - 1)
+        else (Bad "array call, wrong dimension")
+    else (Ok identType)
+
+checkBLExprRExprs :: BLExpr -> RExpr -> Int -> Enviroment -> (Err Type, Int)
+checkBLExprRExprs left right counter env = case (get_RExpr right env) of
+        Ok TypeInt -> case left of
+            ArrayEl (BLExprNode _ bLExpr) (RExprNode _ rExpr) -> checkBLExprRExprs bLExpr rExpr (counter+1) env
+            Id ident -> (checkIdentType (getIdent ident) env, counter)
+        Ok tp -> (Bad "array index must be of type Int", counter)
+        Bad msg -> (Bad msg, counter)
+
 
 ------------------------------------------------------------
 --------- Parser AbsNode -----------------------------------
