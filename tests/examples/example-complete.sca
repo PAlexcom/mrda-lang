@@ -1,4 +1,5 @@
 // Basic Declaration
+var c: Int = 1;
 var c: Char = 'c';
 var x: Int = 5 + 6;
 var y: Int = 5 * 4;
@@ -47,6 +48,10 @@ def func(a: Int, b: Boolean, d: Char, n: Float, l: Boolean, m: Array[Array[Char]
     ++counter;
     --counter;
 
+    // Primitive function call
+    writeInt(a);
+    readChar(d);
+
     x = ++(++x) + ++x;
     x = ++x + x;
     y-- = x-- - ++x--;
@@ -54,9 +59,7 @@ def func(a: Int, b: Boolean, d: Char, n: Float, l: Boolean, m: Array[Array[Char]
     y++;
 
     s[1][2];
-
     d = s[1][1];
-
     s[1][0] = 'a';
 
     *p = 'c';

@@ -43,7 +43,6 @@ data Type
     | TypeError String
     deriving (Eq, Show, Read)
 
--- TODO pointer
 -- TODO for
 -- TODO if
 -- TODO while
@@ -291,12 +290,25 @@ isFunCallGood funcName rExprsNode env =
 getNodeInfo :: AbsNode -> String
 getNodeInfo node = let (Pn line column) = (pos node) in ("Error => (line: " ++ (show line) ++ " column: " ++ (show column) ++ ")")
 
+addToEnvPrimitiveFunctions :: State Attributes ()
+addToEnvPrimitiveFunctions = do
+    pushToEnv $ FuncElem "writeInt" TypeString [TypeInt]
+    pushToEnv $ FuncElem "writeFloat" TypeString [TypeFloat]
+    pushToEnv $ FuncElem "writeChar" TypeString [TypeChar]
+    pushToEnv $ FuncElem "writeString" TypeString [TypeString]
+    pushToEnv $ FuncElem "readInt" TypeInt [TypeString]
+    pushToEnv $ FuncElem "readChar" TypeChar [TypeString]
+    pushToEnv $ FuncElem "readFloat" TypeFloat [TypeString]
+    pushToEnv $ FuncElem "readString" TypeString [TypeString]
+    return ()
+
 ------------------------------------------------------------
 --------- Parser ABS ---------------------------------------
 ------------------------------------------------------------
 
 check_Prog :: AbsNode -> State Attributes ()
 check_Prog (ProgramNode posn (Prog decls)) = do
+    addToEnvPrimitiveFunctions
     check_DeclsNode decls
     return ()
 
