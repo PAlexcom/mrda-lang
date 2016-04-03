@@ -1,15 +1,15 @@
 // Basic Declaration
 var c: Char = 'c';
-//val c: Int = 5 + 6;
-// var x: Int = 5 + 6;
-// var y: Int = 5 * 4;
-// var z: Int = 5 / 4;
+val c: Int = 5 + 6;
+var x: Int = 5 + 6;
+var y: Int = 5 * 4;
+var z: Int = 5 / 4;
 val p: *Char = &c;
 
-// // Compound Declaration
-var s: Array[Array[Char](4)](2) = Array(Array('a', 'b', 'c', 'd'), Array('a', 'b', 'c', 'd'));
+// Compound Declaration
+var s: Array[Array[Char](2)](2) = Array(Array('a', 'b'), Array('a', 'b'));
 var i: Array[Array[Int](2)](2) = Array(Array(1+2,3), Array(5+3/7,1));
-var a: Boolean = True;
+var a: Boolean = true;
 
 def proc(valres c: Int, b: Boolean): Int = {
     return (c);
@@ -82,10 +82,10 @@ def func(a: Int, b: Boolean, d: Char, n: Float, l: Boolean, m: Array[Char](5)): 
     return (1+1);
 }
 
-//def main(): Unit = {
-//    val z: Int = func(1, true, 'a', 3, false);
-//    return;
-//}
+def main(): Unit = {
+    val z: Int = func(1, true, 'a', 3, false);
+    return;
+}
 
 // Program execution
-//val run: Unit = main();
+val run: Unit = main();
