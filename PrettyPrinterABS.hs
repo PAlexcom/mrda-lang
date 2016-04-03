@@ -128,6 +128,7 @@ print_Stmt node = case node of
     LExprStmt lExpr -> do
         print_Node lExpr
         return ()
+    ExHandler tryCatchStmt -> do return()
 
 print_FunCall :: FunCall -> State Attributes ()
 print_FunCall (Call ident rExprs) = do
@@ -292,6 +293,7 @@ print_Node node = do
         ReturnStmtNode _ node    -> print_ReturnStmt node
         SelectionStmtNode _ node -> print_SelectionStmt node
         IterStmtNode _ node      -> do return()
+        TryCatchStmtNode _ node -> do return()
     return ()
 
 print_NodeList :: [AbsNode] -> State Attributes ()

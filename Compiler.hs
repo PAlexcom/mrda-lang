@@ -10,7 +10,7 @@ import Error
 import TypeChecker
 import CodeGenerator
 import PrettyPrinterABS
---import PrettyPrinterTAC
+import PrettyPrinterTAC
 
 compileFile fileName = putStrLn fileName >> readFile fileName >>= compile fileName
 compile fileName text = do

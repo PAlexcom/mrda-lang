@@ -1,6 +1,6 @@
-module MRDAPrettyPrinterTAC where
+module PrettyPrinterTAC where
 
-import MRDACodeGenerator
+import CodeGenerator
 
 control :: TAC -> String
 control x = case x of

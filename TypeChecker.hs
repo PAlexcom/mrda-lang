@@ -47,6 +47,9 @@ data Type
 -- TODO for
 -- TODO if
 -- TODO while
+-- TODO primitive functions
+-- TODO try catch
+-- TODO val
 
 ------------------------------------------------------------
 --------- Enviroment Utilities -----------------------------
