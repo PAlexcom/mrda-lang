@@ -41,10 +41,8 @@ data Type
     | TypeUnit
     | TypeArray Type Int
     | TypePointer Type
-    | TypeError String
     deriving (Eq, Show, Read)
 
--- TODO try catch
 -- TODO val
 
 ------------------------------------------------------------
@@ -153,9 +151,7 @@ getCompoundTypeSafe node = Ok (getCompoundType node)
 
 getCompoundType :: CompoundType -> Type
 getCompoundType node = case node of
-    ArrDef (TypeSpecNode _ typeSpec) int -> case int of 
-        Just dim -> TypeArray (getTypeSpec typeSpec) dim
-        Nothing ->  TypeArray (getTypeSpec typeSpec) 0
+    ArrDef (TypeSpecNode _ typeSpec) dim -> TypeArray (getTypeSpec typeSpec) dim
     Pointer (TypeSpecNode _ typeSpec) -> TypePointer (getTypeSpec typeSpec)
 
 type2string :: Type -> String
@@ -480,17 +476,6 @@ check_IterStmtNode (IterStmtNode _ node) = do
                 Ok tp -> case (checkBoolType rExprType) of
                     Ok tp -> check_StmtNode stmt
                     Bad msg -> setError $ (getNodeInfo rExpr) ++ msg 
-                Bad msg -> setError $ (getNodeInfo rExpr) ++ msg
-            offLoopFlag
-            return ()
-            where
-                rExprType = (get_RExprNode rExpr env)
-        DoWhile stmt rExpr -> do
-            onLoopFlag
-            case rExprType of
-                Ok tp -> case (checkBoolType rExprType) of
-                    Ok tp -> check_StmtNode stmt
-                    Bad msg -> setError $ (getNodeInfo rExpr) ++ msg
                 Bad msg -> setError $ (getNodeInfo rExpr) ++ msg
             offLoopFlag
             return ()

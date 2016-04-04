@@ -319,7 +319,7 @@ data BasicType
     deriving (Eq, Ord, Show, Read)
 
 data CompoundType
-    = ArrDef AbsNode (Maybe Int)
+    = ArrDef AbsNode Int
     | Pointer AbsNode
     deriving (Eq, Ord, Show)
 
