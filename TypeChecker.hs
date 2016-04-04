@@ -445,8 +445,15 @@ check_StmtNode (StmtNode _ node) = do
                     return ()
             where
                 tplExpr = get_LExprNode lExpr env
-        ExHandler _ -> do
+        ExHandler tryCatchStmt -> do
+            check_TryCatchStmtNode tryCatchStmt
             return ()
+
+check_TryCatchStmtNode :: AbsNode -> State Attributes ()
+check_TryCatchStmtNode (TryCatchStmtNode _ (TryCatch stmt1 ident stmt2)) = do
+    check_StmtNode stmt1
+    check_StmtNode stmt2
+    return ()
 
 check_JumpStmtNode :: AbsNode -> State Attributes ()
 check_JumpStmtNode node = case node of
