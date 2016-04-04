@@ -7,7 +7,7 @@ tacGenerator abstractSyntaxTree = execState (code_Program abstractSyntaxTree) de
 
 data Attributes = Attributes {
     code :: String,
-    tac :: [TAC],
+    tac :: TACList,
     env :: EnviromentTAC,
     counterTemp :: Int,
     counterLab :: Int,
@@ -72,7 +72,7 @@ data Type
     | TypeFloat
     | TypeString
     | TypeUnit
-    | TypeArray Type (Maybe Int)
+    | TypeArray Type Int
     | TypePointer Type
     deriving (Eq, Show, Read)
 
@@ -135,8 +135,8 @@ isArrayInEnv arrayName env = case match of
 
 isArrayInArrays :: String -> [ArrayElemTAC] -> Maybe ArrayElemTAC
 isArrayInArrays arrayName [] = Nothing
-isArrayInArrays arrayName ((ArrayElemTAC ident label tpa):arrays) = if arrayName == ident
-    then Just (ArrayElemTAC ident label tpa)
+isArrayInArrays arrayName ((ArrayElemTAC ident tmp tpa):arrays) = if arrayName == ident
+    then Just (ArrayElemTAC ident tmp tpa)
     else isArrayInArrays arrayName arrays
 
 isFuncInEnv :: String -> EnviromentTAC -> Maybe FuncElemTAC
@@ -165,9 +165,8 @@ getTypeSpec (TypeSpecNode _ typeSpec) = case typeSpec of
         "Unit"      -> TypeUnit
         "String"    -> TypeString
     CompType (CompoundTypeNode _ compType) -> case compType of
-        ArrDef typeSpecNode (Just dim)  -> TypeArray (getTypeSpec typeSpecNode) (Just dim) 
-        ArrDef typeSpecNode Nothing     -> TypeArray (getTypeSpec typeSpecNode) Nothing
-        Pointer typeSpecNode            -> TypePointer (getTypeSpec typeSpecNode)
+        ArrDef typeSpecNode dim -> TypeArray (getTypeSpec typeSpecNode) dim 
+        Pointer typeSpecNode    -> TypePointer (getTypeSpec typeSpecNode)
 
 getDimType :: Type -> Int
 getDimType tp = case tp of
@@ -188,7 +187,7 @@ getArrayDimType tp = case tp of
     TypeInt     -> 32 
     TypeUnit    -> 1
     TypeString  -> 32
-    TypeArray tpa (Just dim) -> (getDimType tpa) * dim
+    TypeArray tpa dim -> (getDimType tpa) * dim
     TypePointer _ -> 32
 
 getArraySubType :: Type -> Type
@@ -202,6 +201,8 @@ getArraySubType (TypeArray tp _) = tp
 ------------------------------------------------------------
 --------------------------- TAC ----------------------------
 ------------------------------------------------------------
+type TACList = [TAC]
+
 data TAC
     = TACLabel String
     | TACBinaryOp String String String String
@@ -867,10 +868,18 @@ code_BLExpr (BLExprNode _ bLExpr) = case bLExpr of
         return()
     Id ident -> do
         env_Attr <- gets env
-        case (isVarInEnv (getIdent ident) env_Attr) of
+        case (isVarInEnv name env_Attr) of
             Just (_,temp) -> do
                 modify (\attr -> attr{addr = temp})
                 return ()
+            Nothing -> do 
+                case (isArrayInEnv name env_Attr) of
+                    Just (ArrayElemTAC _ tmp _) -> do
+                        modify (\attr -> attr{addr = tmp})
+                        return ()
+                return ()
         return ()
+        where
+            name = getIdent ident
 
 
