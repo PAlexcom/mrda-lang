@@ -243,9 +243,21 @@ checkIdentType name env = case (isIdentInEnv name env) of
     Just tp -> Ok tp
     Nothing -> Bad ("Variable name: " ++ name ++ " is not declared in the scope")
 
+
+isIdentVal :: String -> Enviroment -> Bool
+isIdentVal name env = case match of
+    Just (VarElem ident tp modality) -> (Val == modality)
+    Nothing -> case parentEnv of
+        Just parent -> isIdentVal name parent
+        Nothing -> False
+    where
+        parentEnv = parent env
+        varsEnv = vars env
+        match = isIdentInVars name varsEnv
+
 isIdentInEnv :: String -> Enviroment -> Maybe Type
 isIdentInEnv name env = case match of
-    Just params -> Just params
+    Just (VarElem ident tp modality) -> Just tp
     Nothing -> case parentEnv of
         Just parent -> isIdentInEnv name parent
         Nothing -> Nothing
@@ -254,11 +266,11 @@ isIdentInEnv name env = case match of
         varsEnv = vars env
         match = isIdentInVars name varsEnv
 
-isIdentInVars :: String -> [EnviromentElement] -> Maybe Type
+isIdentInVars :: String -> [EnviromentElement] -> Maybe EnviromentElement
 isIdentInVars name [] = Nothing
 
-isIdentInVars name ((VarElem ident tp _):vars) = if (name == ident)
-    then Just tp
+isIdentInVars name ((VarElem ident tp modality):vars) = if (name == ident)
+    then Just (VarElem ident tp modality)
     else isIdentInVars name vars
 
 getFunctionType :: FunCall -> Enviroment -> Err Type
@@ -417,16 +429,20 @@ check_StmtNode (StmtNode _ node) = do
             return ()
         Assgn lExpr (Assignment_opNode _ assignment_op) rExpr -> do
             case lExpr1 of
-                Ok tp -> case rExpr1 of
-                    Ok tp -> case (checkTypes lExpr1 rExpr1) of
-                        -- Check if it should be an aritmetic type
-                        Ok tp -> case (assignment_op) of
-                            (Assign) -> do return ()
-                            (AssignOp _) -> case (checkAritmTypes lExpr1 rExpr1) of
-                                Ok tp -> do return ()
-                                Bad msg -> setError $ msg
-                        Bad msg -> setError $ msg
-                    Bad msg -> setError $ (getNodeInfo rExpr) ++ msg
+                Ok tp -> if (isIdentVal_LExpr (gLExpr lExpr) env)
+                    then
+                        setError $ (getNodeInfo lExpr) ++ "identifier is defined as read only"
+                    else
+                        case rExpr1 of
+                        Ok tp -> case (checkTypes lExpr1 rExpr1) of
+                            -- Check if it should be an aritmetic type
+                            Ok tp -> case (assignment_op) of
+                                (Assign) -> do return ()
+                                (AssignOp _) -> case (checkAritmTypes lExpr1 rExpr1) of
+                                    Ok tp -> do return ()
+                                    Bad msg -> setError $ msg
+                            Bad msg -> setError $ msg
+                        Bad msg -> setError $ (getNodeInfo rExpr) ++ msg
                 Bad msg -> setError $ (getNodeInfo lExpr) ++ msg
             return ()
             where
@@ -598,11 +614,19 @@ get_LExpr node env = case node of
         Ok _ -> Bad "expression is not a pointer"
         Bad msg -> Bad msg
     PreIncrDecr lExpr _ -> case tpLExpr of
-        Ok tp -> checkAritmType tpLExpr
+        Ok tp -> case (checkAritmType tpLExpr) of
+            Ok tp -> if (isIdentVal_LExpr (gLExpr lExpr) env)
+                then Bad "identifier is defined as read only"
+                else Ok tp
+            Bad msg -> Bad msg
         Bad msg -> Bad msg
         where tpLExpr = get_LExprNode lExpr env
     PostIncrDecr lExpr _ -> case tpLExpr of
-        Ok tp -> checkAritmType tpLExpr
+        Ok tp -> case (checkAritmType tpLExpr) of
+            Ok tp -> if (isIdentVal_LExpr (gLExpr lExpr) env)
+                then Bad "identifier is defined as read only"
+                else Ok tp
+            Bad msg -> Bad msg
         Bad msg -> Bad msg
         where tpLExpr = get_LExprNode lExpr env
     BasLExpr bLExpr -> get_BLExprNode bLExpr env
@@ -633,6 +657,28 @@ checkBLExprRExprs left right counter env = case (get_RExpr right env) of
             Id ident -> (checkIdentType (getIdent ident) env, counter)
         Ok tp -> (Bad "array index must be of type Int", counter)
         Bad msg -> (Bad msg, counter)
+
+
+isIdentVal_LExpr :: LExpr -> Enviroment -> Bool
+isIdentVal_LExpr node env = case node of
+    Deref (RExprNode _ rExpr) -> isIdentVal_RExpr rExpr env
+    PreIncrDecr (LExprNode _ lExpr) _ -> isIdentVal_LExpr lExpr env
+    PostIncrDecr (LExprNode _ lExpr) _ -> isIdentVal_LExpr lExpr env
+    BasLExpr (BLExprNode _ bLExpr) -> isIdentVal_BLExpr bLExpr env
+
+isIdentVal_RExpr :: RExpr -> Enviroment -> Bool
+isIdentVal_RExpr node env = case node of
+    OpAritm (RExprNode _ rExpr1) (RExprNode _ rExpr2) _ -> ((isIdentVal_RExpr rExpr1 env) || (isIdentVal_RExpr rExpr2 env))
+    Not (RExprNode _ rExpr) -> isIdentVal_RExpr rExpr env
+    Neg (RExprNode _ rExpr) -> isIdentVal_RExpr rExpr env
+    Ref (LExprNode _ lExpr) -> isIdentVal_LExpr lExpr env
+    Lexpr (LExprNode _ lExpr) -> isIdentVal_LExpr lExpr env
+    otherwise -> False
+
+isIdentVal_BLExpr :: BLExpr -> Enviroment -> Bool
+isIdentVal_BLExpr node env = case node of
+    ArrayEl (BLExprNode _ bLExpr) (RExprNode _ rExpr) -> ((isIdentVal_BLExpr bLExpr env) || (isIdentVal_RExpr rExpr env))
+    Id ident -> isIdentVal (getIdent ident) env
 
 ------------------------------------------------------------
 --------- Parser AbsNode -----------------------------------

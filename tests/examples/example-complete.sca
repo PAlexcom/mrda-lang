@@ -4,7 +4,7 @@ var c: Char = 'c';
 var x: Int = 5 + 6;
 var y: Int = 5 * 4;
 var z: Int = 5 / 4;
-val p: *Char = &c;
+var p: *Char = &c;
 
 // Compound Declaration
 var s: Array[Array[Char](2)](2) = Array(Array('a', 'b'), Array('a', 'b'));
