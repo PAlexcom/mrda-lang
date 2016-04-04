@@ -1,4 +1,4 @@
-build: lexer parser
+build: lexer parser compile
 
 demo: build test
 
@@ -9,7 +9,10 @@ parser:
 		happy Parser.y
 
 clean:
-		rm Lexer.hs Parser.hs
+		rm Lexer.hs Parser.hs Compiler
+
+compile: 
+		ghc -o Compiler Compiler.hs
 
 test: 
-		runhaskell Compiler.hs tests/examples/example-complete.sca
+		./Compiler tests/example-complete.sca

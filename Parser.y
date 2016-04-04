@@ -238,27 +238,27 @@ IterStmt :: {AbsNode}
 {
 
 data AbsNode 
-    = RExprNode         {pos::Posn, rExpr::RExpr}
-    | FunCallNode       {pos::Posn, funCall::FunCall}
-    | LExprNode         {pos::Posn, lExpr::LExpr}
-    | BLExprNode        {pos::Posn, bLExpr::BLExpr}
-    | ProgramNode       {pos::Posn, program::Program}
-    | DeclNode          {pos::Posn, decl::Decl}
-    | TypeSpecNode      {pos::Posn, typeSpec::TypeSpec}
-    | BasicTypeNode     {pos::Posn, basicType::BasicType}
-    | CompoundTypeNode  {pos::Posn, compoundType::CompoundType}
-    | ComplexRExprNode  {pos::Posn, complexRExpr::ComplexRExpr}
-    | ParameterNode     {pos::Posn, parameter::Parameter}
-    | ModalityParamNode {pos::Posn, modalityParam::ModalityParam}
-    | ModalityDeclNode  {pos::Posn, modalityDecl::ModalityDecl}
-    | CompStmtNode      {pos::Posn, compStmt::CompStmt}
-    | StmtNode          {pos::Posn, stmt::Stmt}
-    | TryCatchStmtNode  {pos::Posn, tryCatch::TryCatchStmt}
-    | Assignment_opNode {pos::Posn, assignment_op::Assignment_op}
-    | JumpStmtNode      {pos::Posn, jumpStmt::JumpStmt} 
-    | ReturnStmtNode    {pos::Posn, returnStmt::ReturnStmt}
-    | SelectionStmtNode {pos::Posn, selectionStmt::SelectionStmt}
-    | IterStmtNode      {pos::Posn, iterStmt::IterStmt}
+    = RExprNode         {pos::Posn, gRExpr::RExpr}
+    | FunCallNode       {pos::Posn, gFunCall::FunCall}
+    | LExprNode         {pos::Posn, gLExpr::LExpr}
+    | BLExprNode        {pos::Posn, gBLExpr::BLExpr}
+    | ProgramNode       {pos::Posn, gProgram::Program}
+    | DeclNode          {pos::Posn, gDecl::Decl}
+    | TypeSpecNode      {pos::Posn, gTypeSpec::TypeSpec}
+    | BasicTypeNode     {pos::Posn, gBasicType::BasicType}
+    | CompoundTypeNode  {pos::Posn, gCompoundType::CompoundType}
+    | ComplexRExprNode  {pos::Posn, gComplexRExpr::ComplexRExpr}
+    | ParameterNode     {pos::Posn, gParameter::Parameter}
+    | ModalityParamNode {pos::Posn, gModalityParam::ModalityParam}
+    | ModalityDeclNode  {pos::Posn, gModalityDecl::ModalityDecl}
+    | CompStmtNode      {pos::Posn, gCompStmt::CompStmt}
+    | StmtNode          {pos::Posn, gStmt::Stmt}
+    | TryCatchStmtNode  {pos::Posn, gTryCatch::TryCatchStmt}
+    | Assignment_opNode {pos::Posn, gAssignment_op::Assignment_op}
+    | JumpStmtNode      {pos::Posn, gJumpStmt::JumpStmt} 
+    | ReturnStmtNode    {pos::Posn, gReturnStmt::ReturnStmt}
+    | SelectionStmtNode {pos::Posn, gSelectionStmt::SelectionStmt}
+    | IterStmtNode      {pos::Posn, gIterStmt::IterStmt}
     deriving (Eq, Ord, Show)
 
 newtype Ident = Ident String

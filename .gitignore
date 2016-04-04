@@ -20,3 +20,4 @@ Parser.hs
 *.tac
 *.info
 .idea
+Compiler
