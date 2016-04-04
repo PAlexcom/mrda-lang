@@ -162,8 +162,7 @@ TypeSpec :: {AbsNode}
     | CompoundType                          { TypeSpecNode (pos $1) (CompType $1) }
 
 CompoundType :: {AbsNode} 
-    : 'array' '[' TypeSpec ']' '(' Int ')'          { CompoundTypeNode (tpos $1) (ArrDef $3 (Just (read (prToken $6)::Int))) }
-    | 'array' '[' TypeSpec ']'                      { CompoundTypeNode (tpos $1) (ArrDef $3 Nothing) }
+    : 'array' '[' TypeSpec ']' '(' Int ')'          { CompoundTypeNode (tpos $1) (ArrDef $3 (read (prToken $6)::Int)) }
     | '*' TypeSpec                                  { CompoundTypeNode (tpos $1) (Pointer $2) }
 
 ComplexRExpr :: {AbsNode} 
