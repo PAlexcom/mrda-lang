@@ -24,7 +24,7 @@ compile isDebug fileName text = do
         Ok abst -> do
             if (isDebug) then (print abst) else do return ()
             putStrLn "-----------------------\n ABS Pretty Printer \n-----------------------"
-            putStrLn $ prettyPrintABS abst
+            putStrLn $ show $ pPrt $ gProgram abst
             putStrLn "-----------------------\n Type Checking \n-----------------------"
             if (isDebug) then (print typeCheckingReport) else do return ()
             case isTypeCheckOk of
