@@ -217,7 +217,7 @@ Assignment_op :: {AbsNode}
     | '/='                                 { Assignment_opNode (tpos $1) (AssignOp "/") }
     | '-='                                 { Assignment_opNode (tpos $1) (AssignOp "-") }
 
-JumpStmt :: {AbsNode} 
+JumpStmt :: {AbsNode}
     : 'break'                              { JumpStmtNode (tpos $1) Break }
     | 'continue'                           { JumpStmtNode (tpos $1) Continue }
 
@@ -232,7 +232,6 @@ SelectionStmt :: {AbsNode}
 
 IterStmt :: {AbsNode} 
     : 'while' '(' RExpr ')' Stmt                        { IterStmtNode (tpos $1) (While $3 $5) }
-    | 'do' Stmt 'while' '(' RExpr ')' ';'               { IterStmtNode (tpos $1) (DoWhile $2 $5) }
     | 'for' '(' Ident '<-' RExpr 'to' RExpr ')' Stmt    { IterStmtNode (tpos $1) (For (Ident (prToken $3)) $5 $7 $9) }
 
 {
