@@ -319,7 +319,7 @@ data BasicType
     deriving (Eq, Ord, Show, Read)
 
 data CompoundType
-    = ArrDef AbsNode (Maybe Int)
+    = ArrDef AbsNode Int
     | Pointer AbsNode
     deriving (Eq, Ord, Show)
 
@@ -378,14 +378,16 @@ data ReturnStmt
     | RetExp AbsNode
     deriving (Eq, Ord, Show) 
 
-data SelectionStmt = IfNoElse AbsNode AbsNode | IfElse AbsNode AbsNode AbsNode
-  deriving (Eq, Ord, Show)
+data SelectionStmt
+    = IfNoElse AbsNode AbsNode
+    | IfElse AbsNode AbsNode AbsNode
+    deriving (Eq, Ord, Show)
 
 data IterStmt 
     = While AbsNode AbsNode 
     | DoWhile AbsNode AbsNode
     | For Ident AbsNode AbsNode AbsNode
-  deriving (Eq, Ord, Show)
+    deriving (Eq, Ord, Show)
 
 
 returnM :: a -> Err a

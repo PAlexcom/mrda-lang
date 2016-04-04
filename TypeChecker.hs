@@ -9,7 +9,8 @@ data Attributes = Attributes {
     isError :: Err String,
     env :: Enviroment,
     counter :: Int,
-    levelCounter :: Int
+    levelCounter :: Int,
+    isLoop :: Bool
 } deriving (Show)
 
 data Enviroment 
@@ -40,18 +41,25 @@ data Type
     | TypeUnit
     | TypeArray Type Int
     | TypePointer Type
-    | TypeError String
     deriving (Eq, Show, Read)
 
--- TODO if
--- TODO try catch
 -- TODO val
 
 ------------------------------------------------------------
 --------- Enviroment Utilities -----------------------------
 ------------------------------------------------------------
 
-defaultAttributes = Attributes (Ok "") (Env [] [] Nothing) 0 0
+defaultAttributes = Attributes (Ok "") (Env [] [] Nothing) 0 0 False
+
+onLoopFlag :: State Attributes ()
+onLoopFlag = do
+    modify (\attr -> attr {isLoop = True})
+    return ()
+
+offLoopFlag :: State Attributes ()
+offLoopFlag = do
+    modify (\attr -> attr {isLoop = False})
+    return ()
 
 increaseCounter :: Attributes -> Attributes
 increaseCounter attr = attr {counter = (counter attr) + 1}
@@ -143,9 +151,7 @@ getCompoundTypeSafe node = Ok (getCompoundType node)
 
 getCompoundType :: CompoundType -> Type
 getCompoundType node = case node of
-    ArrDef (TypeSpecNode _ typeSpec) int -> case int of 
-        Just dim -> TypeArray (getTypeSpec typeSpec) dim
-        Nothing ->  TypeArray (getTypeSpec typeSpec) 0
+    ArrDef (TypeSpecNode _ typeSpec) dim -> TypeArray (getTypeSpec typeSpec) dim
     Pointer (TypeSpecNode _ typeSpec) -> TypePointer (getTypeSpec typeSpec)
 
 type2string :: Type -> String
@@ -217,15 +223,18 @@ checkAritmTypes first second = case (checkAritmType first) of
         Bad msg -> Bad (msg ++ " but found: " ++ (type2string $ getType second))
     Bad msg -> Bad (msg ++ " but found: " ++ (type2string $ getType first))
 
+checkRelType :: Err Type -> Err Type
+checkRelType first = checkRelTypes first first
+
 checkAritmType :: Err Type -> Err Type
 checkAritmType tp = if (tp == (Ok TypeInt)) || (tp == (Ok TypeFloat)) 
     then tp
     else Bad "Incorect type declaration, must be 'Int' or 'Float'"
 
 checkRelTypes :: Err Type -> Err Type -> Err Type
-checkRelTypes first second = case (checkAritmTypes first second) of
+checkRelTypes first second = case (checkBoolTypes first second) of
     Ok tp -> Ok tp
-    Bad msg1 -> case (checkBoolTypes first second) of
+    Bad msg1 -> case (checkAritmTypes first second) of
         Ok tp -> Ok tp
         Bad msg2 -> Bad (msg1 ++ " or " ++ msg2)
 
@@ -398,11 +407,13 @@ check_StmtNode (StmtNode _ node) = do
             check_FunCall funCall
             return ()
         Jmp jumpStmt -> do
+            check_JumpStmtNode jumpStmt
             return ()
         Iter iterStmt -> do
             check_IterStmtNode iterStmt
             return ()
         Sel selectionStmt -> do
+            check_SelectionStmtNode selectionStmt
             return ()
         Assgn lExpr (Assignment_opNode _ assignment_op) rExpr -> do
             case lExpr1 of
@@ -430,34 +441,88 @@ check_StmtNode (StmtNode _ node) = do
                     return ()
             where
                 tplExpr = get_LExprNode lExpr env
-        ExHandler _ -> do
+        ExHandler tryCatchStmt -> do
+            check_TryCatchStmtNode tryCatchStmt
             return ()
+
+check_TryCatchStmtNode :: AbsNode -> State Attributes ()
+check_TryCatchStmtNode (TryCatchStmtNode _ (TryCatch stmt1 ident stmt2)) = do
+    check_StmtNode stmt1
+    check_StmtNode stmt2
+    return ()
+
+check_JumpStmtNode :: AbsNode -> State Attributes ()
+check_JumpStmtNode node = case node of
+    (JumpStmtNode _ Break) -> do
+        isLoop <- gets isLoop
+        if (isLoop)
+        then do return ()
+        else setError $ (getNodeInfo node) ++ "'break' statement must be used inside a loop block" 
+        return ()
+    (JumpStmtNode _ Continue) -> do
+        isLoop <- gets isLoop
+        if (isLoop)
+        then do return ()
+        else setError $ (getNodeInfo node) ++ "'continue' statement must be used inside a loop block" 
+        return ()
 
 check_IterStmtNode :: AbsNode -> State Attributes ()
 check_IterStmtNode (IterStmtNode _ node) = do
     env <- gets env
     case node of
-        While rExpr stmt -> case (get_RExprNode rExpr env) of
-            Ok tp -> check_StmtNode stmt
-            Bad msg -> setError $ (getNodeInfo rExpr) ++ msg
-        DoWhile stmt rExpr -> case (get_RExprNode rExpr env) of
-            Ok tp -> check_StmtNode stmt
-            Bad msg -> setError $ (getNodeInfo rExpr) ++ msg
-        For ident rExpr1 rExpr2 stmt -> case identType of
-            Ok tp -> case rExpr1Type of
-                Ok tp -> case (checkAritmType (Ok tp)) of
-                    Ok tp -> case rExpr2Type of
-                        Ok tp -> case (checkAritmType rExpr2Type) of
-                            Ok tp -> check_StmtNode stmt
+        While rExpr stmt -> do
+            onLoopFlag
+            case rExprType of
+                Ok tp -> case (checkBoolType rExprType) of
+                    Ok tp -> check_StmtNode stmt
+                    Bad msg -> setError $ (getNodeInfo rExpr) ++ msg 
+                Bad msg -> setError $ (getNodeInfo rExpr) ++ msg
+            offLoopFlag
+            return ()
+            where
+                rExprType = (get_RExprNode rExpr env)
+        For ident rExpr1 rExpr2 stmt -> do
+            onLoopFlag
+            case identType of
+                Ok tp -> case rExpr1Type of
+                    Ok tp -> case (checkAritmType rExpr1Type) of
+                        Ok tp -> case rExpr2Type of
+                            Ok tp -> case (checkAritmType rExpr2Type) of
+                                Ok tp -> check_StmtNode stmt
+                                Bad msg -> setError $ (getNodeInfo rExpr2) ++ msg 
                             Bad msg -> setError $ (getNodeInfo rExpr2) ++ msg 
-                        Bad msg -> setError $ (getNodeInfo rExpr2) ++ msg 
-                    Bad msg -> setError $ (getNodeInfo rExpr1) ++ msg  
-                Bad msg -> setError $ (getNodeInfo rExpr1) ++ msg
-            Bad msg -> setError msg
+                        Bad msg -> setError $ (getNodeInfo rExpr1) ++ msg  
+                    Bad msg -> setError $ (getNodeInfo rExpr1) ++ msg
+                Bad msg -> setError msg
+            offLoopFlag
+            return ()
             where
                 identType = checkIdentType (getIdent ident) env
                 rExpr1Type = get_RExprNode rExpr1 env
                 rExpr2Type = get_RExprNode rExpr2 env
+    return ()
+
+check_SelectionStmtNode :: AbsNode -> State Attributes ()
+check_SelectionStmtNode (SelectionStmtNode _ node) = do
+    env <- gets env
+    case node of
+        IfNoElse rExpr stmt -> case (rExprType) of
+            Ok tp -> case (checkBoolType rExprType) of
+                Ok tp -> check_StmtNode stmt
+                Bad msg -> setError $ (getNodeInfo rExpr) ++ msg
+            Bad msg -> setError $ (getNodeInfo rExpr) ++ msg
+            where
+                rExprType = get_RExprNode rExpr env
+        IfElse rExpr stmt1 stmt2 -> case (rExprType) of
+            Ok tp -> case (checkBoolType rExprType) of
+                Ok tp -> do
+                    check_StmtNode stmt1
+                    check_StmtNode stmt2
+                    return ()
+                Bad msg -> setError $ (getNodeInfo rExpr) ++ msg
+            Bad msg -> setError $ (getNodeInfo rExpr) ++ msg
+            where
+                rExprType = get_RExprNode rExpr env
     return ()
 
 check_FunCall :: FunCall -> State Attributes ()
