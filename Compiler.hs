@@ -12,30 +12,34 @@ import CodeGenerator
 import PrettyPrinterABS
 import PrettyPrinterTAC
 
-compileFile fileName = putStrLn fileName >> readFile fileName >>= compile fileName
-compile fileName text = do
+compileFile isDebug fileName = putStrLn fileName >> readFile fileName >>= compile isDebug fileName
+compile isDebug fileName text = do
     putStrLn "-----------------------\n Tokens \n-----------------------"
-    print tokens
+    if (isDebug) then (print tokens) else do return ()
     putStrLn "-----------------------\n Abstract Syntax Tree \n-----------------------"
     case abstractSyntaxTree of
         Bad msg -> do
             putStrLn ("***********************\n" ++ msg ++ "\n***********************")
             return ()
         Ok abst -> do
-            print abst
+            if (isDebug) then (print abst) else do return ()
             putStrLn "-----------------------\n ABS Pretty Printer \n-----------------------"
             putStrLn $ prettyPrintABS abst
             putStrLn "-----------------------\n Type Checking \n-----------------------"
-            print typeCheckingReport
+            if (isDebug) then (print typeCheckingReport) else do return ()
             case isTypeCheckOk of
                 Ok _ -> do
                     putStrLn "-----------------------\n OK | Type Checking \n-----------------------"
                     putStrLn "-----------------------\n TAC \n-----------------------"
-                    print tacAttr
-                    putStrLn "-----------------------\n TAC Source Code \n-----------------------"
-                    putStrLn $ code tacAttr
+                    if (isDebug)
+                        then do
+                            print tacAttr
+                            putStrLn "-----------------------\n TAC Source Code \n-----------------------"
+                            putStrLn $ code tacAttr
+                            return ()
+                        else do return ()
                     putStrLn "-----------------------\n TAC Pretty Printer \n-----------------------"
-                    putStrLn $ prettyPrintTAC $ tac tacAttr
+                    putStrLn $ show $ prettyPrint $ tac tacAttr
                     where
                         tacAttr = tacGenerator abst
                 Bad msg -> putStrLn ("***********************\n" ++ msg ++ " \n***********************")
@@ -47,8 +51,19 @@ compile fileName text = do
         tokens = parseTokens text
         abstractSyntaxTree = pProgram tokens
 
+usage :: IO ()
+usage = do
+  putStrLn $ unlines
+    [ "usage: Call with one of the following argument combinations:"
+    , "  --help          Display this help message."
+    , "  (files)         Parse content of files verbosely."
+    , "  -d (files)      Debug mode. Shows Tokens, Environment and Abstract Syntax Tree."
+    ]
+  exitFailure
+
 main = do
   args <- getArgs
   case args of
-    [] -> hGetContents stdin >>= compile ""
-    fileName -> mapM_ (compileFile) fileName
+    ["--help"] -> usage
+    "-d":fileName -> mapM_ (compileFile True) fileName
+    fileName -> mapM_ (compileFile False) fileName
