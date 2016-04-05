@@ -1,0 +1,10 @@
+var c:Int = 10;
+var p: *Int = &c;
+var kk: *Int = p;
+var zza: Float = 5.0;
+
+def func():Unit = {
+	zza = 1;
+	*kk = 5;
+	return;
+}

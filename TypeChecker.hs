@@ -209,7 +209,7 @@ getMaxType TypeInt TypeFloat = Ok TypeFloat
 getMaxType TypeFloat TypeInt = Ok TypeFloat
 --getMaxType TypeChar TypeString = Ok TypeString
 --getMaxType TypeString TypeChar = Ok TypeString
-getMaxType tp1 tp2 = Bad "i tipi ('" ++ (type2string tp1) ++ "' e '" ++ (type2string tp2) ++ "') non sono compatibili."
+getMaxType tp1 tp2 = Bad ("i tipi ('" ++ (type2string tp1) ++ "' e '" ++ (type2string tp2) ++ "') non sono compatibili.")
 
 checkBoolTypes :: Err Type -> Err Type -> Err Type
 checkBoolTypes first second = case (checkTypes first second) of

@@ -1,0 +1,19 @@
+var b:Boolean = true;
+
+def func(): Unit = {
+    var k: Boolean = (true && (10 > 5));
+    var counter: Int = 10;
+
+    while (b == true) {
+        var z: Int = 5;
+        continue;
+    }
+
+    if ((10 >= 8) || (counter > 5)) {
+        counter = 2;
+    } else {
+        var x: Int = 4;
+    }
+
+    return;
+}

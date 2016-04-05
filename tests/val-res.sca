@@ -1,0 +1,11 @@
+var x: Int = 5;
+
+def proc(valres c: Int, b: Boolean): Int = {
+	c = c+1;
+    return (c+1);
+}
+
+def main():Unit = {
+	var y:Int = proc(x,true);
+	return;
+}
