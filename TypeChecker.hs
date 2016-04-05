@@ -478,7 +478,7 @@ check_StmtNode (StmtNode _ node) = do
                                 (AssignOp _) -> case (checkAritmTypes lExpr1 rExpr1) of
                                     Ok tp -> do return ()
                                     Bad msg -> setError $ (getNodeInfo lExpr) ++ msg
-                            Bad msg -> setError $ msg
+                            Bad msg -> setError $ (getNodeInfo lExpr) ++ msg
                         Bad msg -> setError $ (getNodeInfo rExpr) ++ msg
                 Bad msg -> setError $ (getNodeInfo lExpr) ++ msg
             return ()
