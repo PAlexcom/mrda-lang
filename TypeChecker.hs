@@ -209,20 +209,20 @@ getMaxType TypeInt TypeFloat = Ok TypeFloat
 getMaxType TypeFloat TypeInt = Ok TypeFloat
 --getMaxType TypeChar TypeString = Ok TypeString
 --getMaxType TypeString TypeChar = Ok TypeString
-getMaxType _ _ = Bad "i tipi non sono compatibili"
+getMaxType tp1 tp2 = Bad "i tipi ('" ++ (type2string tp1) ++ "' e '" ++ (type2string tp2) ++ "') non sono compatibili."
 
 checkBoolTypes :: Err Type -> Err Type -> Err Type
 checkBoolTypes first second = case (checkTypes first second) of
     Ok tp -> if (tp == TypeBoolean)
         then Ok tp
-        else Bad ("error type: must be of type 'bool'")
+        else Bad ("error type: must be of type 'bool', but found " ++ (type2string tp))
     Bad msg -> Bad msg
 
 -- Controlla che i due tipi siano utilizzabili su operazioni booleane
 checkBoolType :: Err Type -> Err Type
 checkBoolType (Ok tp) = if (tp == TypeBoolean)
     then Ok tp
-    else Bad ("error type: must be of type 'bool'")
+    else Bad ("error type: must be of type 'bool', but found " ++ (type2string tp))
 
 -- Controlla che i due tipi siano utilizzabili su operazioni aritmetiche
 checkAritmTypes :: Err Type -> Err Type -> Err Type
