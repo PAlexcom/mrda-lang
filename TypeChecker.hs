@@ -655,6 +655,7 @@ get_RExpr node env = case node of
 
 get_LExpr :: LExpr -> Enviroment -> Err Type
 get_LExpr node env = case node of
+    -- Controlla che il tipo sia di tipo TypePointer
     Deref rExpr -> case (get_RExprNode rExpr env) of
         Ok (TypePointer tp) -> Ok tp
         Ok _ -> Bad "expression is not a pointer"
@@ -691,6 +692,7 @@ get_BLExpr node env = case node of
 unMountArrayType :: Err Type -> Int -> Err Type
 unMountArrayType (Ok identType) counter = if (counter > 0)
     then if (isArray (Ok identType))
+        -- Controlla che la chiamata dell'array non vada fuori dalla sua dimensione dichiarata
         then case (identType) of
             TypeArray tp int -> unMountArrayType (Ok tp) (counter - 1)
         else (Bad "array call, wrong dimension")
@@ -704,6 +706,11 @@ checkBLExprRExprs left right counter env = case (get_RExpr right env) of
         Ok tp -> (Bad "array index must be of type Int", counter)
         Bad msg -> (Bad msg, counter)
 
+
+-- Sotto seguono delle funzioni utilizzate per la
+-- verifica di variabili di tipo "val" (constant)
+-- verificano che non siano modificabili all'interno del codice sorgente
+-- in caso negativo viene generato un'errore
 
 isIdentVal_LExpr :: LExpr -> Enviroment -> Bool
 isIdentVal_LExpr node env = case node of
@@ -729,6 +736,12 @@ isIdentVal_BLExpr node env = case node of
 ------------------------------------------------------------
 --------- Parser AbsNode -----------------------------------
 ------------------------------------------------------------
+
+
+-- sotto seguono delle funzioni con l'unico scopo
+-- di fare da proxy/mediatore, espandano un nodo chiamando la funzione
+-- appropriata per il prossimo nodo che e stato smontato
+
 
 get_FunCallNode :: AbsNode -> Enviroment -> Err Type
 get_FunCallNode (FunCallNode _ node) env = getFunctionType node env
