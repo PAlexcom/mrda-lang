@@ -31,7 +31,7 @@ data ModalityType
     | Var
     deriving (Eq, Show, Read)    
 
--- I possibili tipi
+-- I tipi primitivi possibili
 data Type 
     = TypeInt
     | TypeChar
@@ -339,9 +339,14 @@ addToEnvPrimitiveFunctions = do
 --------- Parser ABS ---------------------------------------
 ------------------------------------------------------------
 
+
+-- Le funzioni che iniziano con il nome "check_" lavorano sulla monade stato
+-- Le funzioni che iniziano con il nome "get_" lavorano sul tipo Err Type, cioè restituiscono Err Type
+
+
 check_Prog :: AbsNode -> State Attributes ()
 check_Prog (ProgramNode posn (Prog decls)) = do
-    addToEnvPrimitiveFunctions
+    addToEnvPrimitiveFunctions -- Aggiunge all'enviroment attuale (scope più in alto) le funzioni predefinite dal linguaggio
     check_DeclsNode decls
     return ()
 
@@ -379,6 +384,7 @@ check_Decl node = case node of
         return ()
         where
             tp = get_TypeSpecNode typeSpecNode
+    -- Controlla che il tipo di ritorno di una funzione corrisponda al tipo dichiarato all'interno del costrutto "return"
     Dfun ident parametersNode basicTypeNode compStmtNode returnStmtNode -> do
         pushToEnv $ FuncElem (getIdent ident) (getType $ get_BasicTypeNode basicTypeNode) (serializeEnvParameters parametersNode)
         setNewEnv
@@ -451,16 +457,24 @@ check_StmtNode (StmtNode _ node) = do
             check_SelectionStmtNode selectionStmt
             return ()
         Assgn lExpr (Assignment_opNode _ assignment_op) rExpr -> do
+            -- Controlla che in lExpr1 non ci siano errori di tipo
             case lExpr1 of
+                -- Nel caso in cui lExpr è stato dichiarato con la modalità "val" (constant)
+                -- in caso affermativo si genera un errore, una variabile in modalità read-only
+                -- non può comparire a sinistra di un'assegnamento
                 Ok tp -> if (isIdentVal_LExpr (gLExpr lExpr) env)
                     then
                         setError $ (getNodeInfo lExpr) ++ "identifier is defined as read only"
                     else
                         case rExpr1 of
+                        -- Controlla che il tipo della parte sinistra sia compatibile con la parte destra
                         Ok tp -> case (checkTypes lExpr1 rExpr1) of
                             -- Check if it should be an aritmetic type
                             Ok tp -> case (assignment_op) of
                                 (Assign) -> do return ()
+                                -- Nel caso in cui abbiamo un assegnamento di tipo "a += b"
+                                -- bisogna verificare se il tipo permette operazioni aritmetiche
+                                -- in caso negativo viene generato un errore
                                 (AssignOp _) -> case (checkAritmTypes lExpr1 rExpr1) of
                                     Ok tp -> do return ()
                                     Bad msg -> setError $ msg
@@ -493,12 +507,16 @@ check_TryCatchStmtNode (TryCatchStmtNode _ (TryCatch stmt1 ident stmt2)) = do
 check_JumpStmtNode :: AbsNode -> State Attributes ()
 check_JumpStmtNode node = case node of
     (JumpStmtNode _ Break) -> do
+        -- Il costrutto "break" può comparire soltanto in uno statement di iterazione
+        -- in caso contrario viene generato un'errore
         isLoop <- gets isLoop
         if (isLoop)
         then do return ()
         else setError $ (getNodeInfo node) ++ "'break' statement must be used inside a loop block" 
         return ()
     (JumpStmtNode _ Continue) -> do
+        -- Il costrutto "continue" può comparire soltanto in uno statement di iterazione
+        -- in caso contrario viene generato un'errore
         isLoop <- gets isLoop
         if (isLoop)
         then do return ()
@@ -512,6 +530,7 @@ check_IterStmtNode (IterStmtNode _ node) = do
         While rExpr stmt -> do
             onLoopFlag
             case rExprType of
+                -- Controlla se rExprType e di tipo booleano
                 Ok tp -> case (checkBoolType rExprType) of
                     Ok tp -> check_StmtNode stmt
                     Bad msg -> setError $ (getNodeInfo rExpr) ++ msg 
@@ -546,6 +565,7 @@ check_SelectionStmtNode (SelectionStmtNode _ node) = do
     env <- gets env
     case node of
         IfNoElse rExpr stmt -> case (rExprType) of
+            -- Controlla se rExprType e di tipo booleano
             Ok tp -> case (checkBoolType rExprType) of
                 Ok tp -> check_StmtNode stmt
                 Bad msg -> setError $ (getNodeInfo rExpr) ++ msg
@@ -553,6 +573,7 @@ check_SelectionStmtNode (SelectionStmtNode _ node) = do
             where
                 rExprType = get_RExprNode rExpr env
         IfElse rExpr stmt1 stmt2 -> case (rExprType) of
+            -- Controlla se rExprType e di tipo booleano
             Ok tp -> case (checkBoolType rExprType) of
                 Ok tp -> do
                     check_StmtNode stmt1
@@ -567,6 +588,8 @@ check_SelectionStmtNode (SelectionStmtNode _ node) = do
 check_FunCall :: FunCall -> State Attributes ()
 check_FunCall (Call ident rExprs) = do
     env <- gets env
+    -- Controlla se la funzione chiamata è presente nello scope (cioè se esiste),
+    -- controllo per vedere se i tipi dei parametri attuali corrispondono a quelli formali
     case (isFunCallGood funcName rExprs env) of
         Ok tp -> do
             return ()
@@ -632,6 +655,7 @@ get_RExpr node env = case node of
 
 get_LExpr :: LExpr -> Enviroment -> Err Type
 get_LExpr node env = case node of
+    -- Controlla che il tipo sia di tipo TypePointer
     Deref rExpr -> case (get_RExprNode rExpr env) of
         Ok (TypePointer tp) -> Ok tp
         Ok _ -> Bad "expression is not a pointer"
@@ -668,6 +692,7 @@ get_BLExpr node env = case node of
 unMountArrayType :: Err Type -> Int -> Err Type
 unMountArrayType (Ok identType) counter = if (counter > 0)
     then if (isArray (Ok identType))
+        -- Controlla che la chiamata dell'array non vada fuori dalla sua dimensione dichiarata
         then case (identType) of
             TypeArray tp int -> unMountArrayType (Ok tp) (counter - 1)
         else (Bad "array call, wrong dimension")
@@ -681,6 +706,11 @@ checkBLExprRExprs left right counter env = case (get_RExpr right env) of
         Ok tp -> (Bad "array index must be of type Int", counter)
         Bad msg -> (Bad msg, counter)
 
+
+-- Sotto seguono delle funzioni utilizzate per la
+-- verifica di variabili di tipo "val" (constant)
+-- verificano che non siano modificabili all'interno del codice sorgente
+-- in caso negativo viene generato un'errore
 
 isIdentVal_LExpr :: LExpr -> Enviroment -> Bool
 isIdentVal_LExpr node env = case node of
@@ -706,6 +736,12 @@ isIdentVal_BLExpr node env = case node of
 ------------------------------------------------------------
 --------- Parser AbsNode -----------------------------------
 ------------------------------------------------------------
+
+
+-- sotto seguono delle funzioni con l'unico scopo
+-- di fare da proxy/mediatore, espandano un nodo chiamando la funzione
+-- appropriata per il prossimo nodo che e stato smontato
+
 
 get_FunCallNode :: AbsNode -> Enviroment -> Err Type
 get_FunCallNode (FunCallNode _ node) env = getFunctionType node env
