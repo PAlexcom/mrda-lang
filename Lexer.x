@@ -102,11 +102,9 @@ prToken t = case t of
     Token _ (TokenDouble s)   -> s
     Token _ (TokenChar s)   -> s
 
-
--------------------------------------------------------------------
--- Alex wrapper code.
--- A modified "posn" wrapper.
--------------------------------------------------------------------
+------------------------------------------------------------
+------- Alex wrapper code, a modified "posn" wrapper -------
+------------------------------------------------------------
 
 data Posn = Pn !Int !Int
       deriving (Eq, Show,Ord)

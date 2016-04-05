@@ -61,6 +61,7 @@ usage = do
     ]
   exitFailure
 
+-- Main function, entry point of the program: call e.g.: "./Compiler -d filename.sca"
 main = do
   args <- getArgs
   case args of

@@ -127,7 +127,6 @@ LExpr :: {AbsNode}
     | '++' LExpr                    { LExprNode (tpos $1) (PreIncrDecr $2 "+") }
     | '--' LExpr                    { LExprNode (tpos $1) (PreIncrDecr $2 "-") }
     | LExpr '++'                    { LExprNode (pos $1) (PostIncrDecr $1 "+") }
-    -- TODO sistemare il post incremento per l-value
     | LExpr '--'                    { LExprNode (pos $1) (PostIncrDecr $1 "-") }
     | '(' LExpr ')'                 { $2 }
     | BLExpr                        { LExprNode (pos $1) (BasLExpr $1) }
@@ -135,7 +134,7 @@ LExpr :: {AbsNode}
 FunCall :: {AbsNode} 
     : Ident '(' ListRExpr ')'       { FunCallNode (tpos $1) (Call (Ident (prToken $1)) $3) }
 
-ListRExpr :: {[AbsNode]} 
+ListRExpr
     : {- empty -}                   { [] }
     | RExpr                         { (:[]) $1 }
     | RExpr ',' ListRExpr           { (:) $1 $3 }
@@ -147,7 +146,7 @@ BLExpr :: {AbsNode}
 Program :: {AbsNode} 
     : ListDecl                      { ProgramNode (Pn 1 1) (Prog (reverse $1)) }
 
-ListDecl :: {[AbsNode]}  
+ListDecl
     : {- empty -}                   { [] }
     | ListDecl Decl                 { flip (:) $1 $2 }
 
@@ -161,8 +160,8 @@ TypeSpec :: {AbsNode}
     | CompoundType                          { TypeSpecNode (pos $1) (CompType $1) }
 
 CompoundType :: {AbsNode} 
-    : 'array' '[' TypeSpec ']' '(' Int ')'          { CompoundTypeNode (tpos $1) (ArrDef $3 (read (prToken $6)::Int)) }
-    | '*' TypeSpec                                  { CompoundTypeNode (tpos $1) (Pointer $2) }
+    : 'array' '[' TypeSpec ']' '(' Int ')'  { CompoundTypeNode (tpos $1) (ArrDef $3 (read (prToken $6)::Int)) }
+    | '*' TypeSpec                          { CompoundTypeNode (tpos $1) (Pointer $2) }
 
 ComplexRExpr :: {AbsNode} 
     : RExpr                                 { ComplexRExprNode (pos $1) (Simple $1) }
@@ -171,7 +170,7 @@ ComplexRExpr :: {AbsNode}
 ListComplexRExpr : ComplexRExpr             { (:[]) $1 }
     | ComplexRExpr ',' ListComplexRExpr     { (:) $1 $3 }
 
-ListParameter :: {[AbsNode]}  
+ListParameter
     : {- empty -}                           { [] }
     | Parameter                             { (:[]) $1 }
     | Parameter ',' ListParameter           { (:) $1 $3 }
@@ -189,7 +188,7 @@ ModalityParam :: {AbsNode}
     | 'valres'                              { ModalityParamNode (tpos $1) ModalityP_valres }
     | 'var'                                 { ModalityParamNode (tpos $1) ModalityP_var }
 
-CompStmt :: {AbsNode}                       -- FIXME: previous declaration: pos (head $1), returns error because if the list is empty it throws an error, you should write a function 'head' that handles empty lists
+CompStmt :: {AbsNode}                       
     : ListDecl ListStmt                     { CompStmtNode (Pn 0 0) (BlockDecl (reverse $1) (reverse $2)) }
 
 ListStmt
@@ -235,6 +234,24 @@ IterStmt :: {AbsNode}
 
 {
 
+returnM :: a -> Err a
+returnM = return
+
+thenM :: Err a -> (a -> Err b) -> Err b
+thenM = (>>=)
+
+happyError :: [Token] -> Err a
+happyError ts =
+  Bad $ "Error => syntax error at " ++ tokenPos ts ++ 
+  case ts of
+    [] -> []
+    [Err _] -> " due to lexer error"
+    _ -> " before " ++ unwords (map (id . prToken) (take 4 ts))
+
+------------------------------------------------------------
+------------------------ ABS -------------------------------
+------------------------------------------------------------
+
 data AbsNode 
     = RExprNode         {pos::Posn, gRExpr::RExpr}
     | FunCallNode       {pos::Posn, gFunCall::FunCall}
@@ -262,7 +279,9 @@ data AbsNode
 newtype Ident = Ident String
     deriving (Eq, Ord, Show, Read)
 
-data Boolean = Boolean_True | Boolean_False
+data Boolean
+    = Boolean_True
+    | Boolean_False
     deriving (Eq, Ord, Show, Read)
 
 data Program = Prog [AbsNode]
@@ -385,19 +404,4 @@ data IterStmt
     | DoWhile AbsNode AbsNode
     | For Ident AbsNode AbsNode AbsNode
     deriving (Eq, Ord, Show)
-
-
-returnM :: a -> Err a
-returnM = return
-
-thenM :: Err a -> (a -> Err b) -> Err b
-thenM = (>>=)
-
-happyError :: [Token] -> Err a
-happyError ts =
-  Bad $ "Error => syntax error at " ++ tokenPos ts ++ 
-  case ts of
-    [] -> []
-    [Err _] -> " due to lexer error"
-    _ -> " before " ++ unwords (map (id . prToken) (take 4 ts))
 }

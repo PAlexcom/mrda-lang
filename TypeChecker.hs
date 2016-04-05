@@ -6,18 +6,18 @@ import Control.Monad.State
 import Error
 
 data Attributes = Attributes {
-    isError :: Err String,
-    env :: Enviroment,
+    isError :: Err String,      -- Traccia di eventuali errori presenti nel sorgente
+    env :: Enviroment,          -- Verifica tenendo traccia dello scope in maniera gerarchica
     counter :: Int,
     levelCounter :: Int,
-    isLoop :: Bool
+    isLoop :: Bool              -- Per tener traccia se si è in un blocco di iterazione o meno
 } deriving (Show)
 
 data Enviroment 
     = Env {
-        vars :: [EnviromentElement],
-        funcs :: [EnviromentElement],
-        parent :: Maybe Enviroment
+        vars :: [EnviromentElement],    -- Variabili presenti dentro lo scope attuale
+        funcs :: [EnviromentElement],   -- Funzioni presenti dentro lo scope attuale
+        parent :: Maybe Enviroment      -- Lo scope parent, da utilizzare all'uscita del livello attuale
     }
     deriving (Show)
 
@@ -26,12 +26,14 @@ data EnviromentElement
     | VarElem {ident :: String, tp :: Type, modality :: ModalityType}
     deriving (Show, Eq)
 
+-- Le varie modalità di passaggio dei parametri
 data ModalityType
     = Val
     | ValRes
     | Var
     deriving (Eq, Show, Read)    
 
+-- I possibili tipi
 data Type 
     = TypeInt
     | TypeChar
@@ -49,11 +51,13 @@ data Type
 
 defaultAttributes = Attributes (Ok "") (Env [] [] Nothing) 0 0 False
 
+-- Da abilitare nel momento in cui si entra in uno statement di iterazione
 onLoopFlag :: State Attributes ()
 onLoopFlag = do
     modify (\attr -> attr {isLoop = True})
     return ()
 
+-- Da disabilitare nel momento in cui si esce in uno statement di iterazione
 offLoopFlag :: State Attributes ()
 offLoopFlag = do
     modify (\attr -> attr {isLoop = False})
@@ -65,6 +69,8 @@ increaseCounter attr = attr {counter = (counter attr) + 1}
 increaseLevelCounter :: Attributes -> Attributes
 increaseLevelCounter attr = attr {levelCounter = (levelCounter attr) + 1}
 
+-- Imposta un messaggio di errore riscontratto durante l'analisi, il programma si ferma
+-- nel momento in cui persiste un'errrore
 setError :: String -> State Attributes ()
 setError msg = do
     modify (\attr -> attr {isError = Bad msg})
@@ -76,6 +82,7 @@ setParentEnv = do
     modify (\attr -> attr {env = (Env {vars = [], funcs = [], parent = Just oldEnv})})
     return ()
 
+-- Aggiunte nel Enviroment (scope attuale) una nuova funzione o variabile
 pushToEnv :: EnviromentElement -> State Attributes ()
 pushToEnv envElem = case envElem of
     FuncElem _ _ _ -> do
@@ -87,6 +94,8 @@ pushToEnv envElem = case envElem of
         modify (\attr -> attr {env = currentEnv {vars = envElem : (vars currentEnv)}})
         return ()
 
+-- Inserisce nel Enviroment (scope attuale) i nomi dei parametri formali delle variabili
+-- definite dalla funzione
 pushToEnvFuncParams :: [AbsNode] -> State Attributes ()
 pushToEnvFuncParams [] = do
     return ()
@@ -185,6 +194,7 @@ typeChecking abstractSyntaxTree = finalAttr
     where 
         finalAttr = execState (check_Prog abstractSyntaxTree) defaultAttributes
 
+-- Controlla che i due tipi siano coerenti
 checkTypes :: Err Type -> Err Type -> Err Type
 checkTypes (Ok t1) (Ok t2)  = checkTypesRaw t1 t2
 checkTypes (Bad msg) _      = Bad msg
@@ -209,11 +219,13 @@ checkBoolTypes first second = case (checkTypes first second) of
         else Bad ("error type: must be of type 'bool'")
     Bad msg -> Bad msg
 
+-- Controlla che i due tipi siano utilizzabili su operazioni booleane
 checkBoolType :: Err Type -> Err Type
 checkBoolType (Ok tp) = if (tp == TypeBoolean)
     then Ok tp
     else Bad ("error type: must be of type 'bool'")
 
+-- Controlla che i due tipi siano utilizzabili su operazioni aritmetiche
 checkAritmTypes :: Err Type -> Err Type -> Err Type
 checkAritmTypes first second = case (checkAritmType first) of
     Ok tp -> case (checkAritmType second) of
@@ -241,7 +253,8 @@ checkIdentType name env = case (isIdentInEnv name env) of
     Just tp -> Ok tp
     Nothing -> Bad ("Variable name: " ++ name ++ " is not declared in the scope")
 
-
+-- Esegue il controlle per vedere se la modalità della variabile in esame
+-- e di tipo val (cioè constant)
 isIdentVal :: String -> Enviroment -> Bool
 isIdentVal name env = case match of
     Just (VarElem ident tp modality) -> (Val == modality)
@@ -253,6 +266,7 @@ isIdentVal name env = case match of
         varsEnv = vars env
         match = isIdentInVars name varsEnv
 
+-- Controlla se l'identificativo fornite è presente nello scope (attuale o se è stato definito in un parent)
 isIdentInEnv :: String -> Enviroment -> Maybe Type
 isIdentInEnv name env = case match of
     Just (VarElem ident tp modality) -> Just tp
@@ -271,9 +285,11 @@ isIdentInVars name ((VarElem ident tp modality):vars) = if (name == ident)
     then Just (VarElem ident tp modality)
     else isIdentInVars name vars
 
+-- Restituisce il tipo di ritorno della funzione
 getFunctionType :: FunCall -> Enviroment -> Err Type
 getFunctionType (Call ident rExprsNode) env = isFunCallGood (getIdent ident) rExprsNode env
 
+-- Controlla se la funzione è definita nell'ambiente (scope attuale o quello di un padre)
 isFuncInEnv :: String -> Enviroment -> Maybe (Type, [Type])
 isFuncInEnv funcName env = case match of
     Just (tp,params) -> Just (tp,params)
@@ -292,6 +308,7 @@ isFuncInFuncs funcName ((FuncElem ident tp params):funcs) = if funcName == ident
     then Just (tp, params)
     else isFuncInFuncs funcName funcs
 
+-- Controlla che i tipi dei parametri formali corrispondano a quelli dei tipi formali
 isFunCallGood :: String -> [AbsNode] -> Enviroment -> Err Type
 isFunCallGood funcName rExprsNode env = 
     case (isFuncInEnv funcName env) of
@@ -301,9 +318,12 @@ isFunCallGood funcName rExprsNode env =
                 Just msg -> Bad ("Error in procedure call: " ++ funcName ++ " error: " ++ msg)
         Nothing -> Bad ("Function: " ++ funcName ++ " is not declared in the scope")
 
+-- Utilizzata in caso di errore, per illustrare in maniera più semantica 
+-- su che riga e collana è presente l'errore che lo ha generato
 getNodeInfo :: AbsNode -> String
 getNodeInfo node = let (Pn line column) = (pos node) in ("Error => (line: " ++ (show line) ++ " column: " ++ (show column) ++ ")")
 
+-- Inserisce nello scope più in alto le funzione prederifinite dal linguaggio
 addToEnvPrimitiveFunctions :: State Attributes ()
 addToEnvPrimitiveFunctions = do
     pushToEnv $ FuncElem "writeInt" TypeString [TypeInt]
