@@ -21,7 +21,7 @@ data Attributes = Attributes {
 
 defaultAttributes = Attributes  ""                                      -- code
                                 []                                      -- tac
-                                (EnvTAC [] [] [] Nothing)            -- env
+                                (EnvTAC [] [] [] Nothing)               -- env
                                 0                                       -- counterTemp
                                 0                                       -- counterLab
                                 ""                                      -- addr
@@ -662,29 +662,52 @@ code_SelectionStmt (SelectionStmtNode _ selectionStmt) = case selectionStmt of
         code_Stmt stmt2
         return ()
 
+code_AritmBinOp :: AbsNode -> AbsNode -> String -> State Attributes ()
+code_AritmBinOp rExpr1 rExpr2 op = do
+    (code_RExpr rExpr1)
+    addr_RExpr1 <- gets addr
+    (code_RExpr rExpr2)
+    addr_RExpr2 <- gets addr
+    temp <- newCounterTemp
+    modify (\attr -> attr{addr = temp})
+    addrAttr <- gets addr
+    addCode $ addrAttr ++ "=" ++ addr_RExpr1 ++ op ++ addr_RExpr2
+    addTAC $ TACBinaryOp addrAttr addr_RExpr1 op addr_RExpr2
+    return ()
+
+code_AritmUnOp :: AbsNode -> String -> State Attributes ()
+code_AritmUnOp rExpr op = do
+    (code_RExpr rExpr)
+    addr_RExpr <- gets addr
+    temp <- newCounterTemp
+    modify (\attr -> attr{addr = temp})
+    addrAttr <- gets addr
+    addCode $ addrAttr ++ " = " ++ op ++ addr_RExpr
+    addTAC $ TACUnaryOp addrAttr op addr_RExpr
+    return ()
+
 code_RExpr :: AbsNode -> State Attributes ()
 code_RExpr (RExprNode _ rExpr) = case rExpr of
     OpRelation rExpr1 rExpr2 op -> do
-        modify (\attr -> attr{isSelection = False})
-        (tt,ff) <- gets ttff
-        (code_RExpr rExpr1)
-        addr_RExpr1 <- gets addr
-        (code_RExpr rExpr2)
-        addr_RExpr2 <- gets addr
-        addCode $ "if " ++ addr_RExpr1 ++ op ++ addr_RExpr2 ++ " goto " ++ tt ++ " goto " ++ ff
-        addTAC $ TACIf (TACCondition addr_RExpr1 op addr_RExpr2) tt ff
-        modify (\attr -> attr{isSelection = True})
+        isSel <- gets isSelection
+        if isSel
+            then do
+                modify (\attr -> attr{isSelection = False})
+                (tt,ff) <- gets ttff
+                (code_RExpr rExpr1)
+                addr_RExpr1 <- gets addr
+                (code_RExpr rExpr2)
+                addr_RExpr2 <- gets addr
+                addCode $ "if " ++ addr_RExpr1 ++ op ++ addr_RExpr2 ++ " goto " ++ tt ++ " goto " ++ ff
+                addTAC $ TACIf (TACCondition addr_RExpr1 op addr_RExpr2) tt ff
+                modify (\attr -> attr{isSelection = True})
+                return ()
+            else do
+                code_AritmBinOp rExpr1 rExpr2 op
+                return ()
         return ()
     OpAritm rExpr1 rExpr2 op -> do
-        (code_RExpr rExpr1)
-        addr_RExpr1 <- gets addr
-        (code_RExpr rExpr2)
-        addr_RExpr2 <- gets addr
-        temp <- newCounterTemp
-        modify (\attr -> attr{addr = temp})
-        addrAttr <- gets addr
-        addCode $ addrAttr ++ "=" ++ addr_RExpr1 ++ op ++ addr_RExpr2
-        addTAC $ TACBinaryOp addrAttr addr_RExpr1 op addr_RExpr2
+        code_AritmBinOp rExpr1 rExpr2 op
         return ()
     OpBoolean rExpr1 rExpr2 op -> do
         isSel <- gets isSelection
@@ -713,29 +736,22 @@ code_RExpr (RExprNode _ rExpr) = case rExpr of
                     return ()
             else    
                 do
-                (code_RExpr rExpr1)
-                addr_RExpr1 <- gets addr
-                (code_RExpr rExpr2)
-                addr_RExpr2 <- gets addr
-                temp <- newCounterTemp
-                modify (\attr -> attr{addr = temp})
-                addrAttr <- gets addr
-                addCode $ addrAttr ++ "=" ++ addr_RExpr1 ++ op ++ addr_RExpr2
-                addTAC $ TACBinaryOp addrAttr addr_RExpr1 op addr_RExpr2
+                code_AritmBinOp rExpr1 rExpr2 op
                 return ()
     Not rExpr -> do
-        (tt,ff) <- gets ttff
-        modify (\attr -> attr{ttff = (ff,tt)})
-        code_RExpr rExpr
+        isSel <- gets isSelection
+        if isSel
+            then do
+                (tt,ff) <- gets ttff
+                modify (\attr -> attr{ttff = (ff,tt)})
+                code_RExpr rExpr
+                return ()
+            else do 
+                code_AritmUnOp rExpr "!"
+                return ()
         return ()
     Neg rExpr -> do
-        (code_RExpr rExpr)
-        addr_RExpr <- gets addr
-        temp <- newCounterTemp
-        modify (\attr -> attr{addr = temp})
-        addrAttr <- gets addr
-        addCode $ addrAttr ++ " = negate" ++ addr_RExpr
-        addTAC $ TACUnaryOp addrAttr "-" addr_RExpr
+        code_AritmUnOp rExpr "-"
         return ()
     Ref lExpr -> do
         (code_LExpr lExpr)

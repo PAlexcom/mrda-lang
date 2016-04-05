@@ -53,7 +53,6 @@ import Error
     'break'     { Token _ (TokenSymbols "break") }
     'char'      { Token _ (TokenSymbols "Char") }
     'continue'  { Token _ (TokenSymbols "continue") }
-    'do'        { Token _ (TokenSymbols "do") }
     'else'      { Token _ (TokenSymbols "else") }
     'float'     { Token _ (TokenSymbols "Float") }
     'if'        { Token _ (TokenSymbols "if") }

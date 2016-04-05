@@ -3,7 +3,7 @@
 module PrettyPrinterTAC where
 
 import CodeGenerator
-import Text.PrettyPrint hiding (Str)
+import Text.PrettyPrint
 
 tab = 5
 

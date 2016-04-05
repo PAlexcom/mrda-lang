@@ -3,7 +3,7 @@ module PrettyPrinterABS where
 
 import Parser
 
-import Text.PrettyPrint hiding (Str)
+import Text.PrettyPrint
 
 tab = 2
 

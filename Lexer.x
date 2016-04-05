@@ -43,7 +43,6 @@ tokens :-
     "break"                                 {  \p s -> Token p (TokenSymbols s) }
     "Char"                                  {  \p s -> Token p (TokenSymbols s) }
     "continue"                              {  \p s -> Token p (TokenSymbols s) }
-    "do"                                    {  \p s -> Token p (TokenSymbols s) }
     "else"                                  {  \p s -> Token p (TokenSymbols s) }
     "Float"                                 {  \p s -> Token p (TokenSymbols s) }
     "Array"                                 {  \p s -> Token p (TokenSymbols s) }
