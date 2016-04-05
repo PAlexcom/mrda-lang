@@ -16,7 +16,8 @@ data Attributes = Attributes {
     next :: String,
     exit :: String,
     isSelection :: Bool,
-    array :: ArrayAttr
+    array :: ArrayAttr,
+    tempType :: [(String,Type)] 
 } deriving (Show)
 
 defaultAttributes = Attributes  ""                                      -- code
@@ -30,6 +31,7 @@ defaultAttributes = Attributes  ""                                      -- code
                                 ""                                      -- exit
                                 False                                   -- isSelection
                                 (ArrayAttr "" "" TypeUnit TypeUnit 0)   -- array
+                                []                                      -- tempType
 
 predefinedFuncs = ["writeInt","writeFloat","writeChar","writeString",
                         "readInt","readFloat","readChar","readString"]
@@ -107,66 +109,100 @@ pushFuncToEnv envElem = do
     modify (\attr -> attr {env = currentEnv {funcs = envElem : (funcs currentEnv)}})
     return ()
 
-isVarInEnv :: String -> EnviromentTAC -> Maybe (String,String)
-isVarInEnv varName env = case match of
+pushTempType :: (String,Type) -> State Attributes ()
+pushTempType entry = do
+    modify (\attr -> attr {tempType = entry:(tempType attr)})
+    return ()
+
+getTempType :: String -> State Attributes (Maybe Type)
+getTempType temp = do
+    case (head temp) of
+        'T' -> do
+            tempTypes <- gets tempType
+            return (getTempTypeFromList temp tempTypes)
+        'L' -> do
+            tempTypes <- gets tempType
+            return (getTempTypeFromList temp tempTypes)
+        _ -> do
+            return(Just TypeUnit) 
+
+getTempTypeFromList :: String -> [(String,Type)] -> Maybe Type
+getTempTypeFromList tmp1 ((tmp2,tp):tempTypes) = if (tmp1 == tmp2) then (Just tp) else getTempTypeFromList tmp1 tempTypes 
+getTempTypeFromList _ [] = (Just TypeUnit)
+
+modifyTempType :: String -> Type -> State Attributes ()
+modifyTempType temp tp = do
+    tempTypes <- gets tempType
+    modify (\attr -> attr {tempType = (modifyTempTypeFromList temp tp tempTypes)})
+    return ()
+
+modifyTempTypeFromList :: String -> Type -> [(String,Type)] -> [(String,Type)]
+modifyTempTypeFromList tmp1 tp ((tmp2,_):tempTypes) = if (tmp1 == tmp2) then ((tmp2,tp):tempTypes) else modifyTempTypeFromList tmp1 tp tempTypes 
+modifyTempTypeFromList _ _ [] = []
+
+getVarFromEnv :: String -> EnviromentTAC -> Maybe (String,String)
+getVarFromEnv varName env = case match of
     Just varElem -> Just varElem
     Nothing -> case parentEnv of
-        Just parent -> isVarInEnv varName parent
+        Just parent -> getVarFromEnv varName parent
         Nothing -> Nothing
     where
         parentEnv = parent env
-        match = isVarInVars varName (vars env)
+        match = getVarFromVars varName (vars env)
 
-isVarInVars :: String -> [(String,String)] -> Maybe (String,String)
-isVarInVars varName [] = Nothing
-isVarInVars varName ((ident,temp):vars) = if varName == ident
+getVarFromVars :: String -> [(String,String)] -> Maybe (String,String)
+getVarFromVars varName [] = Nothing
+getVarFromVars varName ((ident,temp):vars) = if varName == ident
     then Just (ident,temp)
-    else isVarInVars varName vars
+    else getVarFromVars varName vars
 
-isArrayInEnv :: String -> EnviromentTAC -> Maybe ArrayElemTAC
-isArrayInEnv arrayName env = case match of
+getArrayFromEnv :: String -> EnviromentTAC -> Maybe ArrayElemTAC
+getArrayFromEnv arrayName env = case match of
     Just arrayElem -> Just arrayElem
     Nothing -> case parentEnv of
-        Just parent -> isArrayInEnv arrayName parent
+        Just parent -> getArrayFromEnv arrayName parent
         Nothing -> Nothing
     where
         parentEnv = parent env
-        match = isArrayInArrays arrayName (arrays env)
+        match = getArrayFromArrays arrayName (arrays env)
 
-isArrayInArrays :: String -> [ArrayElemTAC] -> Maybe ArrayElemTAC
-isArrayInArrays arrayName [] = Nothing
-isArrayInArrays arrayName ((ArrayElemTAC ident tmp tpa):arrays) = if arrayName == ident
+getArrayFromArrays :: String -> [ArrayElemTAC] -> Maybe ArrayElemTAC
+getArrayFromArrays arrayName [] = Nothing
+getArrayFromArrays arrayName ((ArrayElemTAC ident tmp tpa):arrays) = if arrayName == ident
     then Just (ArrayElemTAC ident tmp tpa)
-    else isArrayInArrays arrayName arrays
+    else getArrayFromArrays arrayName arrays
 
-isFuncInEnv :: String -> EnviromentTAC -> Maybe FuncElemTAC
-isFuncInEnv funcName env = case match of
+getFuncFromEnv :: String -> EnviromentTAC -> Maybe FuncElemTAC
+getFuncFromEnv funcName env = case match of
     Just funcElem -> Just funcElem
     Nothing -> case parentEnv of
-        Just parent -> isFuncInEnv funcName parent
+        Just parent -> getFuncFromEnv funcName parent
         Nothing -> Nothing
     where
         parentEnv = parent env
-        match = isFuncInFuncs funcName (funcs env)
+        match = getFuncFromFuncs funcName (funcs env)
 
-isFuncInFuncs :: String -> [FuncElemTAC] -> Maybe FuncElemTAC
-isFuncInFuncs funcName [] = Nothing
-isFuncInFuncs funcName ((FuncElemTAC ident label par):funcs) = if funcName == ident
+getFuncFromFuncs :: String -> [FuncElemTAC] -> Maybe FuncElemTAC
+getFuncFromFuncs funcName [] = Nothing
+getFuncFromFuncs funcName ((FuncElemTAC ident label par):funcs) = if funcName == ident
     then Just (FuncElemTAC ident label par)
-    else isFuncInFuncs funcName funcs
+    else getFuncFromFuncs funcName funcs
 
 getTypeSpec :: AbsNode -> Type
 getTypeSpec (TypeSpecNode _ typeSpec) = case typeSpec of
-    BasTyp (BasicTypeNode _ (BType tp)) -> case tp of
-        "Boolean"   -> TypeBool
-        "Char"      -> TypeChar
-        "Float"     -> TypeFloat
-        "Int"       -> TypeInt
-        "Unit"      -> TypeUnit
-        "String"    -> TypeString
+    BasTyp basTyp -> getBasicType basTyp
     CompType (CompoundTypeNode _ compType) -> case compType of
         ArrDef typeSpecNode dim -> TypeArray (getTypeSpec typeSpecNode) dim 
         Pointer typeSpecNode    -> TypePointer (getTypeSpec typeSpecNode)
+
+getBasicType :: AbsNode -> Type
+getBasicType (BasicTypeNode _ (BType tp)) = case tp of
+    "Boolean"   -> TypeBool
+    "Char"      -> TypeChar
+    "Float"     -> TypeFloat
+    "Int"       -> TypeInt
+    "Unit"      -> TypeUnit
+    "String"    -> TypeString
 
 getDimType :: Type -> Int
 getDimType tp = case tp of
@@ -245,10 +281,12 @@ serializeCompRExprs (ComplexRExprNode _ complexRExpr) = case complexRExpr of
 serializeParams :: [AbsNode] -> State Attributes ([ParamElemTAC])
 serializeParams (param:params) = do
     temp <- newCounterTemp
+    pushTempType (temp,tp)
     listParams <- serializeParams params
     return ((ParamElemTAC ident temp modality):listParams)
     where
-        ParameterNode _ (Param modalityNode (Ident ident) _) = param
+        ParameterNode _ (Param modalityNode (Ident ident) tpSpec) = param
+        tp = getTypeSpec tpSpec
         ModalityParamNode _ modality = modalityNode
 
 serializeParams [] = do
@@ -268,6 +306,14 @@ newCounterTemp = do
     modify increaseCounterTemp
     temp <- gets counterTemp
     return ("T" ++ (show temp))
+
+cast_Int2Float :: String -> State Attributes (String)
+cast_Int2Float t1 = do
+    tmp <- newCounterTemp
+    pushTempType(tmp, TypeFloat)
+    addCode $ tmp ++ "=" ++ "(float)" ++ t1
+    addTAC $ TACUnaryOp tmp "(float)" t1
+    return (tmp)
 
 ------------------------------------------------------------
 ---------------------- Code Generator ----------------------
@@ -310,7 +356,7 @@ code_Decls [] = do
 
 code_Decl :: AbsNode -> State Attributes ()
 code_Decl (DeclNode _ decl) = case decl of
-    DvarBInit _ ident _ (ComplexRExprNode _ (Simple rExpr)) -> do
+    DvarBInit _ ident basTyp (ComplexRExprNode _ (Simple rExpr)) -> do
         (code_RExpr rExpr)
         addr_RExpr <- gets addr
         tmp <- newCounterTemp
@@ -319,6 +365,7 @@ code_Decl (DeclNode _ decl) = case decl of
         addTAC $ TACAssign name addr_RExpr
         addCode $ tmp ++ "=" ++ name
         addTAC $ TACAssign tmp name
+        pushTempType (tmp,(getBasicType basTyp))
         return ()
         where 
             name = getIdent ident 
@@ -330,6 +377,7 @@ code_Decl (DeclNode _ decl) = case decl of
                 addCode $ temp ++ "=" ++ name
                 addTAC $ TACAssign temp name
                 code_DeclArray temp dimElems rExprs 0
+                pushTempType (temp, typeSpec)
                 return ()
             TypePointer _ -> 
                 case complexRExpr of
@@ -338,25 +386,20 @@ code_Decl (DeclNode _ decl) = case decl of
                         addr_RExpr <- gets addr
                         tmp <- newCounterTemp
                         pushVarToEnv (name,tmp)
-                        case head(addr_RExpr) of
-                            '&' -> do
-                                addCode $ name ++ "=" ++ addr_RExpr
-                                addTAC $ TACAssign name addr_RExpr
-                                return ()
-                            _   -> do
-                                addCode $ "*" ++ name ++ "=" ++ addr_RExpr
-                                addTAC $ TACAssign ("*" ++ name) addr_RExpr
-                                return ()
+                        addCode $ name ++ "=" ++ addr_RExpr
+                        addTAC $ TACAssign name addr_RExpr
                         addCode $ tmp ++ " = " ++ name
                         addTAC $ TACAssign tmp name
+                        pushTempType(tmp,typeSpec)
                         return ()
         where
             name = (getIdent ident)
             typeSpec = (getTypeSpec tp)
             dimElems = (getDimType typeSpec)
             rExprs = (serializeCompRExprs complexRExpr)
-    Dfun ident parameters _ compStmt returnStmt -> do
+    Dfun ident parameters basTyp compStmt returnStmt -> do
         label <- newCounterLab
+        pushTempType(label,(getBasicType basTyp))
         params <- serializeParams parameters
         pushFuncToEnv $ FuncElemTAC (getIdent ident) label params
         setNewEnv
@@ -490,16 +533,36 @@ code_AssignmentOp lExpr (Assignment_opNode _ assignment_op) rExpr = case assignm
         addr_LExpr <- gets addr
         (code_RExpr rExpr)
         addr_RExpr <- gets addr
-        addCode $ addr_LExpr ++ "=" ++ addr_RExpr
-        addTAC $ TACAssign addr_LExpr addr_RExpr
+        (Just tp_addr_LExpr) <- getTempType addr_LExpr
+        (Just tp_addr_RExpr) <- getTempType addr_RExpr
+        if((tp_addr_LExpr == TypeFloat)&&(tp_addr_RExpr == TypeInt))
+            then do
+                tmp <- cast_Int2Float addr_RExpr
+                addCode $ addr_LExpr ++ "=" ++ tmp
+                addTAC $ TACAssign addr_LExpr tmp
+                return ()
+            else do
+                addCode $ addr_LExpr ++ "=" ++ addr_RExpr
+                addTAC $ TACAssign addr_LExpr addr_RExpr
+                return ()
         return ()
     AssignOp op  -> do
         (code_LExpr lExpr)
         addr_LExpr <- gets addr
         (code_RExpr rExpr)
         addr_RExpr <- gets addr
-        addCode $ addr_LExpr ++ "=" ++ addr_LExpr ++ op ++ addr_RExpr
-        addTAC $ TACBinaryOp addr_LExpr addr_LExpr op addr_RExpr
+        (Just tp_addr_LExpr) <- getTempType addr_LExpr
+        (Just tp_addr_RExpr) <- getTempType addr_RExpr
+        if((tp_addr_LExpr == TypeFloat)&&(tp_addr_RExpr == TypeInt))
+            then do
+                tmp <- cast_Int2Float addr_RExpr
+                addCode $ addr_LExpr ++ "=" ++ addr_LExpr ++ op ++ tmp
+                addTAC $ TACBinaryOp addr_LExpr addr_LExpr op tmp
+                return ()
+            else do
+                addCode $ addr_LExpr ++ "=" ++ addr_LExpr ++ op ++ addr_RExpr
+                addTAC $ TACBinaryOp addr_LExpr addr_LExpr op addr_RExpr
+                return ()
         return ()
 
 code_FunCall :: AbsNode -> State Attributes ()
@@ -507,13 +570,14 @@ code_FunCall (FunCallNode _ (Call ident rExprs)) = do
         params <- code_CallParams rExprs
         print_CallParams params
         env <- gets env
-        case (isFuncInEnv (getIdent ident) env) of
+        case (getFuncFromEnv (getIdent ident) env) of
             Just (FuncElemTAC _ label paramsIn) -> do
                 temp <- newCounterTemp
                 modify (\attr -> attr{addr = temp})
-                addrAttr <- gets addr
-                addCode $ addrAttr ++ " = " ++ "Call " ++ label ++ " " ++ (show $ length rExprs)
-                addTAC $ TACCall addrAttr label (show $ length rExprs)
+                (Just tpFunc) <- getTempType label
+                pushTempType (temp,tpFunc)
+                addCode $ temp ++ " = " ++ "Call " ++ label ++ " " ++ (show $ length rExprs)
+                addTAC $ TACCall temp label (show $ length rExprs)
                 code_ModalityParams params paramsIn
                 return ()
         return () 
@@ -523,7 +587,7 @@ code_ProcCall (FunCallNode _ (Call ident rExprs)) = do
         params <- code_CallParams rExprs
         print_CallParams params
         env <- gets env
-        case (isFuncInEnv (getIdent ident) env) of
+        case (getFuncFromEnv (getIdent ident) env) of
             Just (FuncElemTAC _ label paramsIn) -> do
             addCode $ "Call " ++ label ++ " " ++ (show $ length rExprs)
             addTAC $ TACCallVoid label (show $ length rExprs)
@@ -606,7 +670,9 @@ code_IterStmt (IterStmtNode _ iterStmt) = case iterStmt of
         labelTT <- newCounterLab
         modify (\attr -> attr{exit = nextL})
         ic <- newCounterTemp
+        pushTempType (ic,TypeInt)
         temp <- newCounterTemp
+        pushTempType (temp,TypeInt)
         addCode $ temp ++ " = " ++ addr_End ++ " - " ++ addr_Start
         addTAC $ TACBinaryOp temp addr_End "-" addr_Start
         addCode $ ic ++ " = " ++ temp ++ " + 1"
@@ -668,22 +734,43 @@ code_AritmBinOp rExpr1 rExpr2 op = do
     addr_RExpr1 <- gets addr
     (code_RExpr rExpr2)
     addr_RExpr2 <- gets addr
+    (Just tp_addr_RExpr1) <- getTempType addr_RExpr1
+    (Just tp_addr_RExpr2) <- getTempType addr_RExpr2
+    case (tp_addr_RExpr1, tp_addr_RExpr2) of 
+        (TypeInt, TypeFloat) -> do
+            tmp <- cast_Int2Float addr_RExpr1
+            res <- code_AritmBinOpCast tmp addr_RExpr2 op
+            pushTempType (res,TypeFloat) 
+            return ()
+        (TypeFloat, TypeInt) -> do
+            tmp <- cast_Int2Float addr_RExpr2
+            res <- code_AritmBinOpCast addr_RExpr1 tmp op
+            pushTempType (res,TypeFloat) 
+            return ()
+        (_, _) -> do
+            res <- code_AritmBinOpCast addr_RExpr1 addr_RExpr2 op
+            pushTempType (res,tp_addr_RExpr1)
+            return ()
+    return ()
+
+code_AritmBinOpCast :: String -> String -> String -> State Attributes (String)
+code_AritmBinOpCast r1 r2 op = do
     temp <- newCounterTemp
     modify (\attr -> attr{addr = temp})
-    addrAttr <- gets addr
-    addCode $ addrAttr ++ "=" ++ addr_RExpr1 ++ op ++ addr_RExpr2
-    addTAC $ TACBinaryOp addrAttr addr_RExpr1 op addr_RExpr2
-    return ()
+    addCode $ temp ++ "=" ++ r1 ++ op ++ r2
+    addTAC $ TACBinaryOp temp r1 op r2
+    return (temp)
 
 code_AritmUnOp :: AbsNode -> String -> State Attributes ()
 code_AritmUnOp rExpr op = do
     (code_RExpr rExpr)
     addr_RExpr <- gets addr
+    (Just tp) <- getTempType addr_RExpr
     temp <- newCounterTemp
     modify (\attr -> attr{addr = temp})
-    addrAttr <- gets addr
-    addCode $ addrAttr ++ " = " ++ op ++ addr_RExpr
-    addTAC $ TACUnaryOp addrAttr op addr_RExpr
+    pushTempType (temp,tp)
+    addCode $ temp ++ " = " ++ op ++ addr_RExpr
+    addTAC $ TACUnaryOp temp op addr_RExpr
     return ()
 
 code_RExpr :: AbsNode -> State Attributes ()
@@ -761,16 +848,32 @@ code_RExpr (RExprNode _ rExpr) = case rExpr of
         code_FunCall funCall
         return ()
     Int int -> do
-        modify (\attr -> attr{addr = (show int)})
+        tmp <- newCounterTemp 
+        addCode $ tmp ++ " = " ++ (show int)
+        addTAC $ TACAssign tmp (show int)
+        modify (\attr -> attr{addr = tmp})
+        pushTempType (tmp,TypeInt)
         return ()
     Char char -> do
-        modify (\attr -> attr{addr = ("\'" ++ (char:[]) ++ "\'")})
+        tmp <- newCounterTemp 
+        addCode $ tmp ++ " = " ++ ("\'" ++ (char:[]) ++ "\'")
+        addTAC $ TACAssign tmp ("\'" ++ (char:[]) ++ "\'")
+        modify (\attr -> attr{addr = tmp})
+        pushTempType (tmp,TypeChar)
         return ()
     String string -> do
-        modify (\attr -> attr{addr = ("\"" ++ string ++ "\"")})
+        tmp <- newCounterTemp 
+        addCode $ tmp ++ " = " ++ ("\"" ++ string ++ "\"")
+        addTAC $ TACAssign tmp ("\"" ++ string ++ "\"")
+        modify (\attr -> attr{addr = tmp})
+        pushTempType (tmp,TypeString)
         return ()
     Float float -> do
-        modify (\attr -> attr{addr = (show float)})
+        tmp <- newCounterTemp 
+        addCode $ tmp ++ " = " ++ (show float)
+        addTAC $ TACAssign tmp (show float)
+        modify (\attr -> attr{addr = tmp})
+        pushTempType (tmp,TypeFloat)
         return ()
     Bool boolean -> 
         case boolean of
@@ -803,8 +906,6 @@ code_RExpr (RExprNode _ rExpr) = case rExpr of
     Lexpr lExpr -> do
         code_LExpr lExpr
         addr_LExpr <- gets addr
-        -- TODO: serve addTAC qua??
-        --addTAC $ TACLExpr addr_LExpr
         return ()
 
 code_LExpr :: AbsNode -> State Attributes ()
@@ -820,19 +921,20 @@ code_LExpr (LExprNode _ lExpr) = case lExpr of
         addTAC $ TACBinaryOp addr_LExpr addr_LExpr op "1"
         temp <- newCounterTemp
         modify (\attr -> attr{addr = temp})
-        addr_Attr <- gets addr
-        addCode $ addr_Attr ++ " = " ++ addr_LExpr
-        addTAC $ TACAssign addr_Attr addr_LExpr
+        addCode $ temp ++ " = " ++ addr_LExpr
+        addTAC $ TACAssign temp addr_LExpr
+        (Just tp) <- getTempType addr_LExpr
+        pushTempType (temp,tp)
         return ()
     PostIncrDecr lExpr op -> do
-        -- TODO sistemare per l-value
         code_LExpr lExpr
         addr_LExpr <- gets addr
         temp <- newCounterTemp
         modify (\attr -> attr{addr = temp})
-        addr_Attr <- gets addr
-        addCode $ addr_Attr ++ " = " ++ addr_LExpr
-        addTAC $ TACAssign addr_Attr addr_LExpr
+        addCode $ temp ++ " = " ++ addr_LExpr
+        addTAC $ TACAssign temp addr_LExpr
+        (Just tp) <- getTempType addr_LExpr
+        pushTempType (temp,tp)
         addCode $ addr_LExpr ++ " = " ++ addr_LExpr ++ " " ++ op ++ " 1"
         addTAC $ TACBinaryOp addr_LExpr addr_LExpr op "1"
         return ()
@@ -840,16 +942,16 @@ code_LExpr (LExprNode _ lExpr) = case lExpr of
         code_BLExpr bLExpr
         return () 
 
--- Gli array partono da 0
 code_BLExpr :: AbsNode -> State Attributes ()
 code_BLExpr (BLExprNode _ bLExpr) = case bLExpr of
     ArrayEl (BLExprNode _ (Id ident)) rExpr -> do 
         env_Attr <- gets env
-        case (isArrayInEnv name env_Attr) of
+        case (getArrayFromEnv name env_Attr) of
             Just (ArrayElemTAC _ label tp) -> do
                 (code_RExpr rExpr)
                 addr_RExpr <- gets addr
                 offsetT <- newCounterTemp
+                pushTempType (offsetT, TypeInt)
                 addCode $ offsetT ++ " = " ++ addr_RExpr ++ " * " ++ (show dimElems)
                 addTAC $ TACBinaryOp offsetT addr_RExpr "*" (show dimElems)
                 modify (\attr -> attr{array = ArrayAttr offsetT name tp tpElems dimElems})
@@ -870,9 +972,11 @@ code_BLExpr (BLExprNode _ bLExpr) = case bLExpr of
         case array_BLExpr of
             ArrayAttr offsetA baseA tpA tpElemA tpElemWidthA -> do
                 tmp <- newCounterTemp
+                pushTempType (tmp, TypeInt)
                 addCode $ tmp ++ " = " ++ addr_RExpr ++ " * " ++ (show dimElems)
                 addTAC $ TACBinaryOp tmp addr_RExpr "*" (show dimElems)
                 offsetT <- newCounterTemp
+                pushTempType (offsetT, TypeInt)
                 addCode $ offsetT ++ " = " ++ offsetA ++ " + " ++ tmp
                 addTAC $ TACBinaryOp offsetT offsetA "+" tmp
                 modify (\attr -> attr{array = ArrayAttr offsetT baseA tpA tpElems dimElems})
@@ -884,12 +988,12 @@ code_BLExpr (BLExprNode _ bLExpr) = case bLExpr of
         return()
     Id ident -> do
         env_Attr <- gets env
-        case (isVarInEnv name env_Attr) of
+        case (getVarFromEnv name env_Attr) of
             Just (_,temp) -> do
                 modify (\attr -> attr{addr = temp})
                 return ()
             Nothing -> do 
-                case (isArrayInEnv name env_Attr) of
+                case (getArrayFromEnv name env_Attr) of
                     Just (ArrayElemTAC _ tmp _) -> do
                         modify (\attr -> attr{addr = tmp})
                         return ()
@@ -897,5 +1001,3 @@ code_BLExpr (BLExprNode _ bLExpr) = case bLExpr of
         return ()
         where
             name = getIdent ident
-
-

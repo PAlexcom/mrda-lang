@@ -79,8 +79,8 @@ data Token =
     deriving (Eq,Show,Ord)
 
 tokenPos :: [Token] -> String
-tokenPos (Token (Pn l _) _ :_) = "line " ++ show l
-tokenPos (Err (Pn l _) :_) = "line " ++ show l
+tokenPos (Token (Pn l c) _ :_) = "line " ++ (show l) ++ " column " ++ (show c) 
+tokenPos (Err (Pn l c) :_) = "line " ++ (show l) ++ " column " ++ (show c)
 tokenPos _ = "end of file"
 
 tokenPosn :: Token -> Posn

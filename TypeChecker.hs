@@ -8,8 +8,6 @@ import Error
 data Attributes = Attributes {
     isError :: Err String,      -- Traccia di eventuali errori presenti nel sorgente
     env :: Enviroment,          -- Verifica tenendo traccia dello scope in maniera gerarchica
-    counter :: Int,
-    levelCounter :: Int,
     isLoop :: Bool              -- Per tener traccia se si è in un blocco di iterazione o meno
 } deriving (Show)
 
@@ -49,7 +47,7 @@ data Type
 --------- Enviroment Utilities -----------------------------
 ------------------------------------------------------------
 
-defaultAttributes = Attributes (Ok "") (Env [] [] Nothing) 0 0 False
+defaultAttributes = Attributes (Ok "") (Env [] [] Nothing) False
 
 -- Da abilitare nel momento in cui si entra in uno statement di iterazione
 onLoopFlag :: State Attributes ()
@@ -63,12 +61,6 @@ offLoopFlag = do
     modify (\attr -> attr {isLoop = False})
     return ()
 
-increaseCounter :: Attributes -> Attributes
-increaseCounter attr = attr {counter = (counter attr) + 1}
-
-increaseLevelCounter :: Attributes -> Attributes
-increaseLevelCounter attr = attr {levelCounter = (levelCounter attr) + 1}
-
 -- Imposta un messaggio di errore riscontratto durante l'analisi, il programma si ferma
 -- nel momento in cui persiste un'errrore
 setError :: String -> State Attributes ()
@@ -76,10 +68,17 @@ setError msg = do
     modify (\attr -> attr {isError = Bad msg})
     return ()
 
-setParentEnv :: State Attributes ()
-setParentEnv = do
-    oldEnv <- gets env
-    modify (\attr -> attr {env = (Env {vars = [], funcs = [], parent = Just oldEnv})})
+setNewEnv :: State Attributes ()
+setNewEnv = do
+    currentEnv <- gets env
+    modify (\attr -> attr {env = (Env {vars = [], funcs = [], parent = Just currentEnv})})
+    return ()
+
+setOldEnv :: State Attributes ()
+setOldEnv = do
+    currentEnv <- gets env
+    case (parent currentEnv) of
+        Just parentEnv -> modify (\attr -> attr {env = parentEnv})
     return ()
 
 -- Aggiunte nel Enviroment (scope attuale) una nuova funzione o variabile
@@ -382,6 +381,7 @@ check_Decl node = case node of
             tp = get_TypeSpecNode typeSpecNode
     Dfun ident parametersNode basicTypeNode compStmtNode returnStmtNode -> do
         pushToEnv $ FuncElem (getIdent ident) (getType $ get_BasicTypeNode basicTypeNode) (serializeEnvParameters parametersNode)
+        setNewEnv
         pushToEnvFuncParams parametersNode
         check_CompStmtNode compStmtNode
         env <- gets env
@@ -389,11 +389,14 @@ check_Decl node = case node of
             Ok tp -> do
                 case (checkTypes (get_BasicTypeNode basicTypeNode) (Ok tp)) of
                     Ok _ -> do
+                        setOldEnv
                         return()
                     Bad msg -> do
+                        setOldEnv
                         setError $ (getNodeInfo basicTypeNode) ++ "In function: " ++ (getIdent ident) ++ " declared type and returned type are not equal " ++ msg
                         return()
             Bad msg -> do
+                setOldEnv
                 setError $ (getNodeInfo returnStmtNode) ++ msg
                 return()
 
@@ -408,8 +411,10 @@ get_ReturnStmt node env = case node of
 
 check_CompStmtNode :: AbsNode -> State Attributes ()
 check_CompStmtNode (CompStmtNode _ (BlockDecl decls stmts)) = do
+    setNewEnv
     check_DeclsNode decls
     check_StmtsNode stmts
+    setOldEnv
     return ()
 
 check_StmtsNode :: [AbsNode] -> State Attributes ()
