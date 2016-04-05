@@ -56,7 +56,8 @@ def func(a: Int, b: Boolean, d: Char, n: Float, l: Boolean, m: Array[Array[Char]
 
     // Primitive function call
     writeInt(a);
-    readChar(d);
+
+    x = readInt("anything");
 
     x = ++(++x) + ++x;
     x = ++x + x;

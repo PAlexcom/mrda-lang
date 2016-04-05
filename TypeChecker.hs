@@ -207,8 +207,8 @@ checkTypesRaw t1 t2
 getMaxType :: Type -> Type -> Err Type
 getMaxType TypeInt TypeFloat = Ok TypeFloat
 getMaxType TypeFloat TypeInt = Ok TypeFloat
-getMaxType TypeChar TypeString = Ok TypeString
-getMaxType TypeString TypeChar = Ok TypeString
+--getMaxType TypeChar TypeString = Ok TypeString
+--getMaxType TypeString TypeChar = Ok TypeString
 getMaxType _ _ = Bad "i tipi non sono compatibili"
 
 checkBoolTypes :: Err Type -> Err Type -> Err Type
@@ -630,7 +630,11 @@ get_RExpr node env = case node of
         where
             tp1 = get_RExprNode rExpr1 env
             tp2 = get_RExprNode rExpr2 env
-    OpAritm rExpr1 rExpr2 _ -> checkAritmTypes tp1 tp2
+    OpAritm rExpr1 rExpr2 _ -> case tp1 of
+        Ok tp -> case tp2 of
+            Ok tp -> checkAritmTypes tp1 tp2
+            Bad msg -> Bad msg
+        Bad msg -> Bad msg
         where
             tp1 = get_RExprNode rExpr1 env
             tp2 = get_RExprNode rExpr2 env
