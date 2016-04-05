@@ -5,7 +5,7 @@ import Parser
 
 import Text.PrettyPrint hiding (Str)
 
-tab = 1
+tab = 2
 
 instance PrettyPrinter Program where
     pPrt (Prog decls) = vcat ( map pPrt (map gDecl decls))
@@ -16,7 +16,7 @@ instance PrettyPrinter Decl where
     pPrt (DvarCInit modD ident tpSpec cRExpr) =
         pPrt (gModalityDecl modD) <+> pPrt ident <> colon <+> pPrt (gTypeSpec tpSpec) <+> text "=" <+> pPrt (gComplexRExpr cRExpr) <> semi
     pPrt (Dfun ident params basType cStmt rStmt) =
-        text "def" <+> pPrt ident <+> (parens (hsep (punctuate comma (map pPrt (map gParameter params))))) <> colon <> pPrt (gBasicType basType) <+> text "=" <+> lbrace $$ nest tab ((pPrt (gCompStmt cStmt) $+$ pPrt (gReturnStmt rStmt) $+$ rbrace ))
+        text "def" <+> pPrt ident <+> (parens (hsep (punctuate comma (map pPrt (map gParameter params))))) <> colon <> pPrt (gBasicType basType) <+> text "=" <+> lbrace $$ nest tab (pPrt (gCompStmt cStmt) $+$ pPrt (gReturnStmt rStmt)) $+$ rbrace 
 
 instance PrettyPrinter ModalityDecl where
     pPrt ModalityD_val = text "val" 
@@ -97,7 +97,7 @@ instance PrettyPrinter CompStmt where
     pPrt (BlockDecl decls stmts) = (vcat (map pPrt (map gDecl decls))) $$ (vcat (map pPrt (map gStmt stmts)))
 
 instance PrettyPrinter Stmt where
-    pPrt (Comp cStmt) = lbrace $+$ nest tab (pPrt (gCompStmt cStmt) $+$ rbrace ) 
+    pPrt (Comp cStmt) = pPrt (gCompStmt cStmt) 
     pPrt (ProcCall fcall) = pPrt (gFunCall fcall) <> semi
     pPrt (Jmp jStmt) = pPrt (gJumpStmt jStmt) <> semi
     pPrt (Iter iStmt) = pPrt (gIterStmt iStmt) 
@@ -107,7 +107,7 @@ instance PrettyPrinter Stmt where
     pPrt (ExHandler tcStmt) = pPrt (gTryCatch tcStmt)
 
 instance PrettyPrinter TryCatchStmt where
-    pPrt (TryCatch stm1 ident stm2) = text "try" <+> pPrt (gStmt stm1) $+$ text "catch" <+> lbrace $$ nest tab (text "case" <+> text "ex" <> colon <+> pPrt ident <+> text "=>" <+> pPrt (gStmt stm2) $+$ rbrace)
+    pPrt (TryCatch stm1 ident stm2) = text "try" <+> lbrace $+$ nest tab (pPrt (gStmt stm1)) $+$ rbrace <+> text "catch" <+> lbrace $$ nest tab (text "case" <+> text "ex" <> colon <+> pPrt ident <+> text "=>" <+> lbrace $+$ nest tab (pPrt (gStmt stm2)) $+$ rbrace) $+$ rbrace
 
 instance PrettyPrinter Assignment_op where
     pPrt Assign = equals
@@ -122,12 +122,12 @@ instance PrettyPrinter ReturnStmt where
     pPrt (RetExp rExp) = text "return" <> (parens (pPrt (gRExpr rExp))) <> semi
 
 instance PrettyPrinter SelectionStmt where
-    pPrt (IfNoElse rExp stm) = text "if" <> (parens (pPrt (gRExpr rExp))) <+> pPrt (gStmt stm) 
-    pPrt (IfElse rExp stm1 stm2) = text "if" <> (parens (pPrt (gRExpr rExp))) <+> pPrt (gStmt stm1) <+> text "else" <+> pPrt (gStmt stm2)
+    pPrt (IfNoElse rExp stm) = text "if" <> (parens (pPrt (gRExpr rExp))) <+> lbrace $+$ nest tab (pPrt (gStmt stm)) $+$ rbrace  
+    pPrt (IfElse rExp stm1 stm2) = text "if" <> (parens (pPrt (gRExpr rExp))) <+> lbrace $+$ nest tab (pPrt (gStmt stm1)) $+$ rbrace <+> text "else" <+> lbrace $+$ nest tab (pPrt (gStmt stm2)) $+$ rbrace 
 
 instance PrettyPrinter IterStmt where
-    pPrt (While rExp stm) = text "while" <> (parens (pPrt (gRExpr rExp))) <+> pPrt (gStmt stm) 
-    pPrt (For ident rExp1 rExp2 stm) = text "for" <> (parens ((pPrt ident) <+> text "<-" <+> (pPrt (gRExpr rExp1)) <+> text "to" <+> (pPrt (gRExpr rExp2)))) <+> pPrt (gStmt stm)
+    pPrt (While rExp stm) = text "while" <> (parens (pPrt (gRExpr rExp))) <+> lbrace $+$ nest tab (pPrt (gStmt stm)) $+$ rbrace 
+    pPrt (For ident rExp1 rExp2 stm) = text "for" <> (parens ((pPrt ident) <+> text "<-" <+> (pPrt (gRExpr rExp1)) <+> text "to" <+> (pPrt (gRExpr rExp2)))) <+> lbrace $+$ nest tab (pPrt (gStmt stm)) $+$ rbrace
 
 class PrettyPrinter a where
   pPrt :: a -> Doc
