@@ -5,6 +5,7 @@ import Control.Monad.State
 
 tacGenerator abstractSyntaxTree = execState (code_Program abstractSyntaxTree) defaultAttributes
 
+-- Attributi mantenuti nello stato
 data Attributes = Attributes {
     code :: String,
     tac :: TACList,
@@ -42,7 +43,7 @@ predefinedFuncs = ["writeInt","writeFloat","writeChar","writeString",
 
 data EnviromentTAC 
     = EnvTAC {
-        vars :: [(String, String)],           -- couple (ident, label)
+        vars :: [(String, String)],           -- (ident, temp)
         arrays :: [ArrayElemTAC],
         funcs :: [FuncElemTAC],
         parent :: Maybe EnviromentTAC
@@ -67,23 +68,14 @@ data FuncElemTAC = FuncElemTAC {idF :: String, labF :: String, parF :: [ParamEle
 data ParamElemTAC = ParamElemTAC {idP :: String, tempP :: String, modP :: ModalityParam}
     deriving (Eq, Show)
 
-data Type 
-    = TypeInt
-    | TypeChar
-    | TypeBool
-    | TypeFloat
-    | TypeString
-    | TypeUnit
-    | TypeArray Type Int
-    | TypePointer Type
-    deriving (Eq, Show, Read)
-
+-- imposta un nuovo environment, salvando il corrente in parent
 setNewEnv :: State Attributes ()
 setNewEnv = do
     currentEnv <- gets env
     modify (\attr -> attr {env = (EnvTAC {vars = [], arrays = [], funcs = [], parent = Just currentEnv})})
     return ()
 
+-- imposta l'abmiente attuale recuperandolo dal parent
 setOldEnv :: State Attributes ()
 setOldEnv = do
     currentEnv <- gets env
@@ -91,29 +83,34 @@ setOldEnv = do
         Just parentEnv -> modify (\attr -> attr {env = parentEnv})
     return ()
 
+-- aggiunge una nuova coppia (ident var, temporaneo) alla lista delle variabili nell'ambiente
 pushVarToEnv :: (String,String) -> State Attributes ()
 pushVarToEnv envElem = do
     currentEnv <- gets env
     modify (\attr -> attr {env = currentEnv {vars = envElem : (vars currentEnv)}})
     return ()
 
+-- aggiunge un nuovo elemento array alla lista di array nell'ambiente
 pushArrayToEnv :: ArrayElemTAC -> State Attributes ()
 pushArrayToEnv envElem = do
     currentEnv <- gets env
     modify (\attr -> attr {env = currentEnv {arrays = envElem : (arrays currentEnv)}})
     return ()
 
+-- aggiunge un nuovo elemento funzione alla lista delle funzioni nell'ambiente
 pushFuncToEnv :: FuncElemTAC -> State Attributes ()
 pushFuncToEnv envElem = do
     currentEnv <- gets env
     modify (\attr -> attr {env = currentEnv {funcs = envElem : (funcs currentEnv)}})
     return ()
 
+-- aggiunge una nuova coppia (temporaneo, tipo) alla lista dei temporanei nell'ambiente
 pushTempType :: (String,Type) -> State Attributes ()
 pushTempType entry = do
     modify (\attr -> attr {tempType = entry:(tempType attr)})
     return ()
 
+-- recupera il tipo corrispondente a un temporaneo
 getTempType :: String -> State Attributes (Maybe Type)
 getTempType temp = do
     case (head temp) of
@@ -130,6 +127,7 @@ getTempTypeFromList :: String -> [(String,Type)] -> Maybe Type
 getTempTypeFromList tmp1 ((tmp2,tp):tempTypes) = if (tmp1 == tmp2) then (Just tp) else getTempTypeFromList tmp1 tempTypes 
 getTempTypeFromList _ [] = (Just TypeUnit)
 
+-- modifica il tipo di un temporaneo nell'ambiente
 modifyTempType :: String -> Type -> State Attributes ()
 modifyTempType temp tp = do
     tempTypes <- gets tempType
@@ -140,6 +138,7 @@ modifyTempTypeFromList :: String -> Type -> [(String,Type)] -> [(String,Type)]
 modifyTempTypeFromList tmp1 tp ((tmp2,_):tempTypes) = if (tmp1 == tmp2) then ((tmp2,tp):tempTypes) else modifyTempTypeFromList tmp1 tp tempTypes 
 modifyTempTypeFromList _ _ [] = []
 
+-- recupera una variabile dall'ambiente 
 getVarFromEnv :: String -> EnviromentTAC -> Maybe (String,String)
 getVarFromEnv varName env = case match of
     Just varElem -> Just varElem
@@ -156,6 +155,7 @@ getVarFromVars varName ((ident,temp):vars) = if varName == ident
     then Just (ident,temp)
     else getVarFromVars varName vars
 
+-- recupera un elemento array dall'ambiente
 getArrayFromEnv :: String -> EnviromentTAC -> Maybe ArrayElemTAC
 getArrayFromEnv arrayName env = case match of
     Just arrayElem -> Just arrayElem
@@ -172,6 +172,7 @@ getArrayFromArrays arrayName ((ArrayElemTAC ident tmp tpa):arrays) = if arrayNam
     then Just (ArrayElemTAC ident tmp tpa)
     else getArrayFromArrays arrayName arrays
 
+-- recupera una funzione dall'ambiente
 getFuncFromEnv :: String -> EnviromentTAC -> Maybe FuncElemTAC
 getFuncFromEnv funcName env = case match of
     Just funcElem -> Just funcElem
@@ -188,6 +189,23 @@ getFuncFromFuncs funcName ((FuncElemTAC ident label par):funcs) = if funcName ==
     then Just (FuncElemTAC ident label par)
     else getFuncFromFuncs funcName funcs
 
+
+------------------------------------------------------------
+-------------------------- TYPES ---------------------------
+------------------------------------------------------------
+
+data Type 
+    = TypeInt
+    | TypeChar
+    | TypeBool
+    | TypeFloat
+    | TypeString
+    | TypeUnit
+    | TypeArray Type Int
+    | TypePointer Type
+    deriving (Eq, Show, Read)
+
+-- converte il tipo TypeSpec di un TypeSpecNode in un tipo Type
 getTypeSpec :: AbsNode -> Type
 getTypeSpec (TypeSpecNode _ typeSpec) = case typeSpec of
     BasTyp basTyp -> getBasicType basTyp
@@ -195,6 +213,7 @@ getTypeSpec (TypeSpecNode _ typeSpec) = case typeSpec of
         ArrDef typeSpecNode dim -> TypeArray (getTypeSpec typeSpecNode) dim 
         Pointer typeSpecNode    -> TypePointer (getTypeSpec typeSpecNode)
 
+-- converte il tipo BasicType di un BasicTypeNode in un tipo Type
 getBasicType :: AbsNode -> Type
 getBasicType (BasicTypeNode _ (BType tp)) = case tp of
     "Boolean"   -> TypeBool
@@ -204,6 +223,7 @@ getBasicType (BasicTypeNode _ (BType tp)) = case tp of
     "Unit"      -> TypeUnit
     "String"    -> TypeString
 
+-- restituisce la dimensione di un tipo (può essere modificata a piacere)
 getDimType :: Type -> Int
 getDimType tp = case tp of
     TypeBool    -> 1
@@ -215,6 +235,7 @@ getDimType tp = case tp of
     TypeArray tpa _ -> getDimType tpa
     TypePointer _ -> 32 
 
+-- calcola la dimensione degli elementi di un array
 getArrayDimType :: Type -> Int
 getArrayDimType tp = case tp of
     TypeBool    -> 1
@@ -226,13 +247,9 @@ getArrayDimType tp = case tp of
     TypeArray tpa dim -> (getDimType tpa) * dim
     TypePointer _ -> 32
 
+-- recupera il tipo degli elementi di un array
 getArraySubType :: Type -> Type
 getArraySubType (TypeArray tp _) = tp
-
-------------------------------------------------------------
---------------------- FINE ENVIRONMENT ---------------------
-------------------------------------------------------------
-
 
 ------------------------------------------------------------
 --------------------------- TAC ----------------------------
@@ -255,29 +272,35 @@ data TAC
     | TACException String
     deriving (Show)
 
+------------------------------------------------------------
+------------------------ Utilities -------------------------
+------------------------------------------------------------
+
+-- aggiunge una nuova istruzione TAC alla lista di istruzioni TAC
 addTAC :: TAC -> State Attributes ()
 addTAC tacData = do
     modify (\attr -> attr{tac = (tac attr) ++ [tacData]})
     return ()
 
-------------------------------------------------------------
------------------------- Utilities -------------------------
-------------------------------------------------------------
-
+-- aumenta di uno il contatore dei temporanei
 increaseCounterTemp :: Attributes -> Attributes
 increaseCounterTemp attr = attr {counterTemp = (counterTemp attr) + 1}
 
+-- aumenta di uno il contatore delle labels
 increaseCounterLab :: Attributes -> Attributes
 increaseCounterLab attr = attr {counterLab = (counterLab attr) + 1}
 
+-- recupera l'identificativo (stringa) da un nodo Ident
 getIdent :: Ident -> String
 getIdent (Ident ident) = ident
 
+-- dato un ComplexRExprNode restituisce una lista di RExprNode
 serializeCompRExprs :: AbsNode -> [AbsNode]
 serializeCompRExprs (ComplexRExprNode _ complexRExpr) = case complexRExpr of
     Simple rExprNode -> [rExprNode]
     Array complexRExprs -> foldr (++) [] (map (serializeCompRExprs) complexRExprs) 
 
+-- converte una lista di ParameterNode in una lista di ParamElemTAC
 serializeParams :: [AbsNode] -> State Attributes ([ParamElemTAC])
 serializeParams (param:params) = do
     temp <- newCounterTemp
@@ -292,21 +315,26 @@ serializeParams (param:params) = do
 serializeParams [] = do
     return ([]) 
 
+-- aggiunge una nuova stringa code al code già prodotto
 addCode :: String -> State Attributes ()
 addCode newCode = modify (\attr -> attr{code = (code attr) ++ newCode ++ "\n"})
 
+-- crea e restituisce una nuova label
 newCounterLab :: State Attributes (String)
 newCounterLab = do
     modify increaseCounterLab
     label <- gets counterLab
     return ("L" ++ (show label))
 
+-- crea e restituisce un nuovo temporaneo
 newCounterTemp :: State Attributes (String)
 newCounterTemp = do
     modify increaseCounterTemp
     temp <- gets counterTemp
     return ("T" ++ (show temp))
 
+-- aggiunge un istruzione di cast da Int a Float 
+-- e restituisce il temporaneo corrispondente di tipo Float
 cast_Int2Float :: String -> State Attributes (String)
 cast_Int2Float t1 = do
     tmp <- newCounterTemp
@@ -319,6 +347,7 @@ cast_Int2Float t1 = do
 ---------------------- Code Generator ----------------------
 ------------------------------------------------------------
 
+-- codifica in istruzioni TAC le istruzioni di un ProgramNode
 code_Program :: AbsNode -> State Attributes ()
 code_Program (ProgramNode _ (Prog decls)) = do
     label <- newCounterLab
@@ -329,6 +358,7 @@ code_Program (ProgramNode _ (Prog decls)) = do
     addTAC $ TACPreamble "halt"
     return ()
 
+-- codifica in istruzioni TAC le dichiarazioni delle funzioni predefinite 
 code_PredefinedFuncs :: [String] -> State Attributes ()
 code_PredefinedFuncs (func:funcs) = do
     label <- newCounterLab
@@ -345,6 +375,7 @@ code_PredefinedFuncs (func:funcs) = do
 code_PredefinedFuncs [] = do
     return ()
 
+-- codifica in istruzioni TAC una lista di dichiarazioni (lista di DeclNode)
 code_Decls :: [AbsNode] -> State Attributes ()
 code_Decls (x:xs) = do
     code_Decl x
@@ -354,6 +385,8 @@ code_Decls (x:xs) = do
 code_Decls [] = do
     return ()
 
+-- codifica in istruzioni TAC una dichiarazione (DeclNode)
+-- rispettivamente di: variabili di tipo base, array e puntatori, funzioni
 code_Decl :: AbsNode -> State Attributes ()
 code_Decl (DeclNode _ decl) = case decl of
     DvarBInit _ ident basTyp (ComplexRExprNode _ (Simple rExpr)) -> do
@@ -415,6 +448,7 @@ code_Decl (DeclNode _ decl) = case decl of
         setOldEnv
         return ()
 
+-- codifica in istruzioni TAC la dichiarazione di un array elemento per elemento
 code_DeclArray :: String -> Int -> [AbsNode] -> Int -> State Attributes ()
 code_DeclArray base dimElems (rExpr:rExprs) offset = do
     (code_RExpr rExpr)
@@ -426,6 +460,7 @@ code_DeclArray base dimElems (rExpr:rExprs) offset = do
 code_DeclArray base dimElems [] offset = do
     return ()  
 
+-- codifica in istruzioni TAC un return statement
 code_ReturnStmt :: AbsNode -> State Attributes ()
 code_ReturnStmt (ReturnStmtNode _ returnStmt) = case returnStmt of
     RetExpVoid -> do
@@ -439,6 +474,7 @@ code_ReturnStmt (ReturnStmtNode _ returnStmt) = case returnStmt of
         addTAC $ TACReturn addr_RExpr
         return () 
 
+-- codifica in istruzioni TAC un CompStmt entrando in un nuovo ambiente
 code_CompStmt :: AbsNode -> State Attributes ()
 code_CompStmt (CompStmtNode _ (BlockDecl decls stmts)) = do
     setNewEnv
@@ -447,6 +483,7 @@ code_CompStmt (CompStmtNode _ (BlockDecl decls stmts)) = do
     setOldEnv
     return ()
 
+-- codifica in istruzioni TAC una lista di statements
 code_Stmts :: [AbsNode] -> State Attributes ()
 code_Stmts (stmt:stmts) = do
     code_Stmt stmt
@@ -456,6 +493,10 @@ code_Stmts (stmt:stmts) = do
 code_Stmts [] = do
     return ()
 
+-- codifica in istruzioni TAC uno statement (StmtNode)
+-- rispettivamente di: CompStmt, chiamata di procedura, 
+-- jump statement, iterazione, if statement, assegnamento,
+-- left-expression, blocco try catch  
 code_Stmt :: AbsNode -> State Attributes ()
 code_Stmt (StmtNode _ stmt) = case stmt of
     Comp compStmt -> do
@@ -491,6 +532,7 @@ code_Stmt (StmtNode _ stmt) = case stmt of
         code_TryCatch tryCatch
         return () 
 
+-- codifica in istruzioni TAC un blocco Try-Catch
 code_TryCatch :: AbsNode -> State Attributes ()
 code_TryCatch (TryCatchStmtNode _ tryCatch) = case tryCatch of
     TryCatch stmtTry ident stmtCatch -> do
@@ -513,6 +555,8 @@ code_TryCatch (TryCatchStmtNode _ tryCatch) = case tryCatch of
         addTAC $ TACLabel nextL
         return () 
 
+-- codifica in istruzioni TAC uno statement Break o Continue
+-- exit viene impostata all'inizio del loop all'etichetta della prima istruzione dopo il loop
 code_JumpStmt :: AbsNode -> State Attributes ()
 code_JumpStmt (JumpStmtNode _ jumpStmt) = case jumpStmt of
     Break       -> do
@@ -526,6 +570,9 @@ code_JumpStmt (JumpStmtNode _ jumpStmt) = case jumpStmt of
         addTAC $ TACGoto nextL
         return ()
 
+-- codifica in istruzioni TAC un assegnamento
+-- in caso di assegnamento di tipo Int a tipo Float esegue il casting
+-- in caso di operazione tra tipi Int e Float esegue il casting
 code_AssignmentOp :: AbsNode -> AbsNode -> AbsNode -> State Attributes ()
 code_AssignmentOp lExpr (Assignment_opNode _ assignment_op) rExpr = case assignment_op of
     Assign      -> do
@@ -565,6 +612,10 @@ code_AssignmentOp lExpr (Assignment_opNode _ assignment_op) rExpr = case assignm
                 return ()
         return ()
 
+-- codifica in istruzioni TAC le istruzioni di una chiamata di funzione:
+-- al termine imposta in un temporaneo il valore restituito e
+-- in caso di parametri passati in modalità val-res le rispettive variabili
+-- vengono settate ai valori corretti all'uscita dalla funzione
 code_FunCall :: AbsNode -> State Attributes ()
 code_FunCall (FunCallNode _ (Call ident rExprs)) = do
         params <- code_CallParams rExprs
@@ -582,6 +633,9 @@ code_FunCall (FunCallNode _ (Call ident rExprs)) = do
                 return ()
         return () 
 
+-- codifica in istruzioni TAC le istruzioni di una chiamata a procedura
+-- in caso di parametri passati in modalità val-res le rispettive variabili
+-- vengono settate ai valori corretti all'uscita dalla funzione
 code_ProcCall :: AbsNode -> State Attributes ()
 code_ProcCall (FunCallNode _ (Call ident rExprs)) = do
         params <- code_CallParams rExprs
@@ -595,6 +649,8 @@ code_ProcCall (FunCallNode _ (Call ident rExprs)) = do
             return ()
         return () 
 
+-- se la modalità di passaggio di un parametro è val-res assegna al parametro passato in input
+-- nella chiamata di funzione il valore finale calcolato dalla funzione stessa 
 code_ModalityParams :: [String] -> [ParamElemTAC] -> State Attributes ()
 code_ModalityParams (param:params) ((ParamElemTAC idP tempP ModalityP_valres):paramsIn) = do
     addCode $ param ++ " = " ++ tempP
@@ -609,6 +665,8 @@ code_ModalityParams (_:params) ((ParamElemTAC _ _ _):paramsIn) = do
 code_ModalityParams [] [] = do 
     return ()
 
+-- codifica in istruzioni TAC le istruzioni delle rExpr dei parametri 
+-- e restituisce una lista di temporanei (ciascuno contenente il risultato di una rExpr)
 code_CallParams :: [AbsNode] -> State Attributes ([String])
 code_CallParams (rExpr:rExprs) = do
     code_RExpr rExpr
@@ -619,6 +677,8 @@ code_CallParams (rExpr:rExprs) = do
 code_CallParams [] = do
     return ([])
 
+-- codifica in istruzioni TAC i parametri passati sottoforma di lista di temporanei
+-- dove ogni temporaneo è il risultato di una rExpr
 print_CallParams :: [String] -> State Attributes ()
 print_CallParams (param:params) = do
     addCode $ "Param " ++ param
@@ -629,6 +689,8 @@ print_CallParams (param:params) = do
 print_CallParams [] = do
     return ()
 
+-- assegna i parametri formali di una funzione a dei temporanei
+-- e li inserisce nell'ambiente
 pushFuncParamsToEnv :: [ParamElemTAC] -> State Attributes ()
 pushFuncParamsToEnv ((ParamElemTAC ident temp modality):params) = do
     pushVarToEnv (ident,temp) 
@@ -640,6 +702,10 @@ pushFuncParamsToEnv ((ParamElemTAC ident temp modality):params) = do
 pushFuncParamsToEnv [] = do 
     return ()
 
+-- codifica in istruzioni TAC le istruzioni dei cicli while e for.
+-- le guardie dei cicli while vengono valutate per short-cut 
+-- il for inizialmente calcola i valori di inizio e fine
+-- calcola la differenza e ne effettua un pari numero di ripetizioni 
 code_IterStmt :: AbsNode -> State Attributes ()
 code_IterStmt (IterStmtNode _ iterStmt) = case iterStmt of
     While rExpr stmt -> do
@@ -697,6 +763,8 @@ code_IterStmt (IterStmtNode _ iterStmt) = case iterStmt of
         where 
             var = getIdent ident
 
+-- codifica in istruzioni TAC gli statement if e if else
+-- le guardie vengono valutate per short-cut
 code_SelectionStmt :: AbsNode -> State Attributes ()
 code_SelectionStmt (SelectionStmtNode _ selectionStmt) = case selectionStmt of
     IfNoElse rExpr stmt -> do
@@ -728,6 +796,8 @@ code_SelectionStmt (SelectionStmtNode _ selectionStmt) = case selectionStmt of
         code_Stmt stmt2
         return ()
 
+-- determina se sia necessario eseguire il casting da int a float
+-- in un'operazione aritmetica binaria e richiama la funzione apposita
 code_AritmBinOp :: AbsNode -> AbsNode -> String -> State Attributes ()
 code_AritmBinOp rExpr1 rExpr2 op = do
     (code_RExpr rExpr1)
@@ -753,6 +823,7 @@ code_AritmBinOp rExpr1 rExpr2 op = do
             return ()
     return ()
 
+-- codifica in istruzioni TAC le operazioni aritmetiche binarie
 code_AritmBinOpCast :: String -> String -> String -> State Attributes (String)
 code_AritmBinOpCast r1 r2 op = do
     temp <- newCounterTemp
@@ -761,6 +832,7 @@ code_AritmBinOpCast r1 r2 op = do
     addTAC $ TACBinaryOp temp r1 op r2
     return (temp)
 
+-- codifica in istruzioni TAC le operazioni aritmetiche unarie
 code_AritmUnOp :: AbsNode -> String -> State Attributes ()
 code_AritmUnOp rExpr op = do
     (code_RExpr rExpr)
@@ -773,6 +845,10 @@ code_AritmUnOp rExpr op = do
     addTAC $ TACUnaryOp temp op addr_RExpr
     return ()
 
+-- codifica in istruzioni TAC le istruzioni di un rExprNode
+-- isSel indica se si sta valutando una guardia per short-cut 
+-- in caso contrario le espressioni vengono trattate come espressioni aritmetiche.
+-- I tipi base vegnono assegnati ad un temoraneo e la coppia (temporaneo,tipo) viene salvata nell'ambiente
 code_RExpr :: AbsNode -> State Attributes ()
 code_RExpr (RExprNode _ rExpr) = case rExpr of
     OpRelation rExpr1 rExpr2 op -> do
@@ -908,6 +984,7 @@ code_RExpr (RExprNode _ rExpr) = case rExpr of
         addr_LExpr <- gets addr
         return ()
 
+-- codifica in istruzioni TAC le istruzioni di un nodo LExpr 
 code_LExpr :: AbsNode -> State Attributes ()
 code_LExpr (LExprNode _ lExpr) = case lExpr of
     Deref rExpr -> do
@@ -942,6 +1019,11 @@ code_LExpr (LExprNode _ lExpr) = case lExpr of
         code_BLExpr bLExpr
         return () 
 
+-- codifica in istruzioni TAC le istruzioni di un nodo BLExpr: 
+-- a differenza di quanto effettuato dal parser, qui viene trattato direttamente il caso
+-- in cui ci sia un accesso a una cella di un array del tipo nomearray[i]
+-- senza terminare in un nodo con il solo identificativo nomearray
+-- in modo tale da poter distinguere identificativi di variabili da array
 code_BLExpr :: AbsNode -> State Attributes ()
 code_BLExpr (BLExprNode _ bLExpr) = case bLExpr of
     ArrayEl (BLExprNode _ (Id ident)) rExpr -> do 
