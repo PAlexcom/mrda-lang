@@ -320,7 +320,7 @@ isFunCallGood funcName rExprsNode env =
 -- Utilizzata in caso di errore, per illustrare in maniera più semantica 
 -- su che riga e collana è presente l'errore che lo ha generato
 getNodeInfo :: AbsNode -> String
-getNodeInfo node = let (Pn line column) = (pos node) in ("Error => (line: " ++ (show line) ++ " column: " ++ (show column) ++ ")")
+getNodeInfo node = let (Pn line column) = (pos node) in ("Error => (line: " ++ (show line) ++ " column: " ++ (show column) ++ ") ")
 
 -- Inserisce nello scope più in alto le funzione prederifinite dal linguaggio
 addToEnvPrimitiveFunctions :: State Attributes ()
@@ -477,7 +477,7 @@ check_StmtNode (StmtNode _ node) = do
                                 -- in caso negativo viene generato un errore
                                 (AssignOp _) -> case (checkAritmTypes lExpr1 rExpr1) of
                                     Ok tp -> do return ()
-                                    Bad msg -> setError $ msg
+                                    Bad msg -> setError $ (getNodeInfo lExpr) ++ msg
                             Bad msg -> setError $ msg
                         Bad msg -> setError $ (getNodeInfo rExpr) ++ msg
                 Bad msg -> setError $ (getNodeInfo lExpr) ++ msg
@@ -551,7 +551,7 @@ check_IterStmtNode (IterStmtNode _ node) = do
                             Bad msg -> setError $ (getNodeInfo rExpr2) ++ msg 
                         Bad msg -> setError $ (getNodeInfo rExpr1) ++ msg  
                     Bad msg -> setError $ (getNodeInfo rExpr1) ++ msg
-                Bad msg -> setError msg
+                Bad msg -> setError $ (getNodeInfo rExpr1) ++ msg
             offLoopFlag
             return ()
             where
