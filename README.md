@@ -1,6 +1,6 @@
 Sca Language
 =================
-Project created during my Master's Degree in Computer Science for the _Languages and Compilers_ class, Tommaso Vuaran, Andrea De Luca.
+Project created during my Master's Degree in Computer Science for the _Languages and Compilers_ class, with Tommaso Vuaran, Andrea De Luca.
 
 _(please do not judge the code quality, it was written in rush and hurry)_
 
@@ -135,4 +135,4 @@ val run: Unit = main();
 
 License
 -------
-__Sca__ is licensed under the MIT License.
+Do what ever you want to.
