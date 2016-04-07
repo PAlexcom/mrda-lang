@@ -1,22 +1,27 @@
 Sca Language
 =================
-Project created during my Master's Degree in Computer Science for the _Languages and Compilers_ class, with @palexcom, Tommaso Vuaran, Andrea De Luca.
+Project created during my Master's Degree in Computer Science for the _Languages and Compilers_ class, Tommaso Vuaran, Andrea De Luca.
 
 _(please do not judge the code quality, it was written in rush and hurry)_
+
+
 -----------------
+
+
 #### Project Goals
-Project a suitable abstract syntax similar to Scala language, and write in Haskell a compiler for the new engineered language.
+Project a suitable abstract syntax similar to [Scala](http://www.scala-lang.org/) language, and write in [Haskell](https://www.haskell.org/) a compiler for the new engineered language.
 
 #### Sub-Goals
 * Project an Abstract Syntax 
 * Type-System
-* Lexer (using Alex)
-* Parser (using Happy) 
+* Lexer (using [Alex](https://www.haskell.org/alex/))
+* Parser (using [Happy](https://www.haskell.org/happy/)) 
 * Type-Checker
-* Three-address code (intermediate code generation)
+* [Three-address code](https://en.wikipedia.org/wiki/Three-address_code) (intermediate code generation)
 
 #### Usage
-Type and run from you terminal `make demo`, it will automatically create compiler a source file example.
+Type and run from you terminal `make demo`, it will automatically create a demo.
+Or simply run `./Compiler filename.sca` to compile the source code from `filename.sca`, there is also a verbose debug mode: `./Compiler -d filename.sca`.
 
 
 #### Sca language syntax
@@ -126,3 +131,8 @@ def main(): Unit = {
 // Program execution
 val run: Unit = main();
 ```
+
+
+License
+-------
+__Sca__ is licensed under the MIT License.
